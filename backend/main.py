@@ -24,17 +24,21 @@ class FeedPost(BaseModel):
 
 @app.post("/users/")
 async def create_user(user: User):
-    response = supabase.table("users").insert(user.dict()).execute()
+    response = supabase.table("users").insert(user.model_dump()).execute()
     if response.data:
         return {"message": "User registered", "user": response.data}
     raise HTTPException(status_code=400, detail="Error registering user")
 
 @app.post("/tasks/")
 async def create_task(task: Task):
-    response = supabase.table("tasks").insert(task.dict()).execute()
+    response = supabase.table("tasks").insert(task.model_dump()).execute()
     if response.data:
         return {"message": "Task created", "task": response.data}
     raise HTTPException(status_code=400, detail="Error creating task")
+
+# @app.post("/feed/")
+# async def post_to_feed(post: FeedPost):
+    
 
 @app.get("/feed/{user_id}")
 async def get_feed(user_id: int):
