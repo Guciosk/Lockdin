@@ -12,7 +12,7 @@ export const LandingPage = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-center text-gray-600 text-lg">
-            We're working hard to bring you something amazing. Stay tuned!
+            LOCKDIN is a platform to keep you accountable for your goals.
           </p>
           <div className="flex justify-center">
             <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
