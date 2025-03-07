@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase_client import supabase
-import datetime
 
 app = FastAPI()
 
@@ -13,14 +12,14 @@ class User(BaseModel):
 class Task(BaseModel):
     user_id: int
     description: str
-    due_time: datetime.datetime
+    due_time: str
 
 class FeedPost(BaseModel):
     user_id: int
     task_id: int
     image_url: str
     status: str
-    post_content: str = None  # Optional
+    post_content: str = None
 
 @app.post("/users/")
 async def create_user(user: User):
