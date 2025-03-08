@@ -7,6 +7,9 @@ load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
+print(SUPABASE_URL)
+print(SUPABASE_KEY)
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def upload_to_storage(bucket_name: str, file_path: str, file_content: bytes, content_type: str = None):

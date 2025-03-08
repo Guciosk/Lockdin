@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request, Form, File, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from supabase_client import supabase
+from datetime import datetime, timezone
+from enum import Enum
 
 from sms_service import (
     send_whatsapp_message, 
@@ -10,12 +12,10 @@ from sms_service import (
     get_media_as_base64, 
     download_media
 )
+
 from typing import Dict, List, Optional
 import json
 import os
-
-from openAI.openaiapi import generate_image_prompt
-
 
 app = FastAPI()
 
@@ -26,11 +26,44 @@ class User(BaseModel):
     username: str
     phone_number: str
     points: int
+    discord_user_id: str
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class Task(BaseModel):
     user_id: int
     description: str
-    due_time: str
+    due_time: datetime
+    status: TaskStatus = TaskStatus.PENDING  # Default to pending
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(timezone.utc).isoformat()
+        }
+    
+    @validator('due_time')
+    def ensure_utc(cls, v):
+        if isinstance(v, str):
+            # Parse the string to datetime
+            dt = datetime.fromisoformat(v)
+            # If no timezone info, assume UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            # If has timezone, convert to UTC
+            return dt.astimezone(timezone.utc)
+        # If already datetime, ensure it's UTC
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
+    
+    def model_dump(self):
+        data = super().model_dump()
+        # Convert datetime to ISO format string for JSON serialization
+        data['due_time'] = self.due_time.astimezone(timezone.utc).isoformat()
+        return data
 
 class FeedPost(BaseModel):
     user_id: int
