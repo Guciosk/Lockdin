@@ -47,3 +47,4 @@ next-env.d.ts
 # env global
 .env.global
 my_env
+venv
