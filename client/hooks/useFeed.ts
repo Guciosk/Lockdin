@@ -13,7 +13,7 @@ interface UseFeedReturn {
   feedPosts: FeedPost[];
   isLoading: boolean;
   error: string | null;
-  createPost: (post: Omit<FeedPost, 'id' | 'createdAt'>) => Promise<void>;
+  createPost: (post: Omit<FeedPost, 'id' | 'createdAt'>) => Promise<FeedPost>;
   likePost: (postId: number) => Promise<void>;
   commentOnPost: (postId: number, comment: string) => Promise<void>;
 }
