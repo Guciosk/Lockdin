@@ -2,6 +2,23 @@ import os
 import supabase
 from datetime import datetime
 
+
+
+'''
+
+when image is sent,
+bot looks through users table 
+and queries the user whose discord_user_id matches
+the discord user id of the sender of the image. when it finds that user,
+it extracts the user_id from it.
+now that it has the user_id, 
+it looks through tasks table and queries the task whose user_id matches the user_id the bot got. 
+if it cant find the task, the bot responds saying “You don't have any active tasks. Please create a task first.”
+
+'''
+
+
+
 class ImageStore:
     def __init__(self):
         self.supabase = supabase.create_client(
@@ -64,21 +81,21 @@ class ImageStore:
         except Exception as e:
             print(f"Error retrieving messages from Supabase: {str(e)}")
             return []
-
-    async def get_task(self, task_id: str):
+    
+    async def find_task_by_user_id(self, discord_user_id: str):
         """
-        Retrieve a task from the tasks table
+        Retrieve a task from the tasks table by user_id
         """
         try:
-            result = self.supabase.table('tasks')\
-                .select('*')\
-                .eq('id', task_id)\
-                .single()\
-                .execute()
+            user = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
+            user_id = user.data[0]['id'] 
+            result = self.supabase.table('tasks').select('*').eq('user_id', user_id).execute()
             return result.data
         except Exception as e:
             print(f"Error retrieving task from Supabase: {str(e)}")
             return None
+
+    
 
     async def get_user_tasks(self, user_id: str):
         """

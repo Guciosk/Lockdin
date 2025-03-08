@@ -114,7 +114,7 @@ class OpenAI_Accountability_Partner:
             
             # Generate appropriate response
             response = self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": f"""You are an AI accountability partner. {mood}. 
                     The task is {task_description} due on {due_date}."""},
