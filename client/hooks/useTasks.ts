@@ -13,7 +13,7 @@ interface UseTasksReturn {
   tasks: Task[];
   isLoading: boolean;
   error: string | null;
-  createTask: (task: Omit<Task, 'id'>) => Promise<void>;
+  createTask: (task: Omit<Task, 'id'>) => Promise<Task>;
   updateTask: (taskId: number, task: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: number) => Promise<void>;
   markTaskComplete: (taskId: number) => Promise<void>;
