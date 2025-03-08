@@ -14,9 +14,6 @@ from typing import Dict, List, Optional
 import json
 import os
 
-from openAI.openaiapi import generate_image_prompt
-
-
 app = FastAPI()
 
 # Check if we're running on Railway
