@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase_client import supabase
+from openAI.openaiapi import generate_image_prompt
 
 app = FastAPI()
 

@@ -67,20 +67,3 @@ def analyze_image(image_path, custom_prompt="What's in this image?"):
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
 
-# Example usage
-if __name__ == "__main__":
-    # Test with local image
-    result = analyze_image(dog_pic, prompt)
-    print("Analysis of local image:")
-    print(result)
-    print("\n" + "-"*50 + "\n")
-    
-    # Test with URL
-    test_image = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-    result = analyze_image(test_image, "Describe the mood and atmosphere of this scene")
-    print("Analysis of URL image:")
-    print(result)
-
-# get a response from chatgpt based on the image it sees
-dog_response = analyze_image(dog_pic, prompt)
-print(dog_response)
