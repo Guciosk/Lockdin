@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase_client import supabase
+from sms_service import send_sms
 
 app = FastAPI()
 
@@ -73,6 +74,6 @@ async def get_all_feed_posts():
     feed_posts = [FeedPost(**post) for post in response.data]
     return feed_posts
 
-# @app.get()
-# async def send_sms(phone_number: str):
-    
+@app.post("/message/")
+async def send_text(phone_number: str, message: str):
+    send_sms(phone_number, message)

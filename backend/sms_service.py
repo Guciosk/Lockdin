@@ -25,4 +25,5 @@ def send_sms(to_phone_number: int, body: str):
         from_=TWILIO_PHONE_NUMBER,
         to=to_phone_number
     )
+    print(f"message.sid: {message.sid}")
     return message.sid
