@@ -1,13 +1,12 @@
 /**
  * User Stats Hook
- * 
+ *
  * Custom hook for handling user statistics functionality.
  * Provides user stats fetching and progress calculation.
  */
 
-import { useState, useEffect } from 'react';
-import apiService from '@/lib/api';
-import { dummyNewsFeed } from '@/lib/dummy-data';
+import { useState, useEffect } from "react";
+import apiService from "@/lib/api";
 
 interface UserStats {
   totalPoints: number;
@@ -34,49 +33,48 @@ export function useUserStats(userId?: number): UseUserStatsReturn {
     level: 1,
     xpToNextLevel: 100,
     progressPercentage: 0,
-    isHealthy: true
+    isHealthy: true,
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const calculateLevel = (points: number): { level: number; xpToNextLevel: number } => {
+  const calculateLevel = (
+    points: number
+  ): { level: number; xpToNextLevel: number } => {
     // Simple level calculation: level = 1 + floor(points / 100)
     const level = 1 + Math.floor(points / 100);
-    
+
     // XP needed for next level
-    const xpToNextLevel = (level * 100) - points;
-    
+    const xpToNextLevel = level * 100 - points;
+
     return { level, xpToNextLevel };
   };
 
   const fetchStats = async () => {
     try {
       setIsLoading(true);
-      
-      // In a real app, we would call the API
-      // const statsData = await apiService.user.getUserStats(userId);
-      
-      // For development, calculate from dummy data
-      const completedTasks = dummyNewsFeed.filter(post => post.isComplete).length;
-      const totalPoints = 350; // Hardcoded for now
-      const currentStreak = 3; // Hardcoded for now
-      
+
+      const statsData = await apiService.user.getUserStats(userId);
+
+      const { totalPoints, tasksCompleted, currentStreak } = statsData;
+
       const { level, xpToNextLevel } = calculateLevel(totalPoints);
-      const progressPercentage = ((level * 100 - xpToNextLevel) / (level * 100)) * 100;
+      const progressPercentage =
+        ((level * 100 - xpToNextLevel) / (level * 100)) * 100;
       const isHealthy = progressPercentage > 20;
-      
+
       setStats({
         totalPoints,
-        tasksCompleted: completedTasks,
+        tasksCompleted,
         currentStreak,
         level,
         xpToNextLevel,
         progressPercentage,
-        isHealthy
+        isHealthy,
       });
     } catch (err) {
-      console.error('Fetch user stats error:', err);
-      setError('Failed to fetch user statistics');
+      console.error("Fetch user stats error:", err);
+      setError("Failed to fetch user statistics");
     } finally {
       setIsLoading(false);
     }
@@ -95,8 +93,8 @@ export function useUserStats(userId?: number): UseUserStatsReturn {
     stats,
     isLoading,
     error,
-    refreshStats
+    refreshStats,
   };
 }
 
-export default useUserStats; 
+export default useUserStats;

@@ -1,17 +1,17 @@
 /**
  * API Service
- * 
+ *
  * This file contains all API calls to the backend server.
  * It uses Axios for HTTP requests and provides a centralized place for API endpoints.
  */
 
-import axios from 'axios';
+import axios from "axios";
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 10000, // 10 seconds
 });
@@ -20,13 +20,14 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     // Get token from localStorage if it exists
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+
     // If token exists, add it to the headers
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -70,47 +71,47 @@ export interface FeedPost {
 export const authAPI = {
   login: async (username: string, password: string) => {
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post("/auth/login", { username, password });
       return response.data;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       throw error;
     }
   },
-  
+
   logout: async () => {
     try {
-      const response = await api.post('/auth/logout');
+      const response = await api.post("/auth/logout");
       return response.data;
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
       throw error;
     }
   },
-  
+
   getCurrentUser: async () => {
     try {
-      const response = await api.get('/auth/me');
+      const response = await api.get("/auth/me");
       return response.data;
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error("Get current user error:", error);
       throw error;
     }
-  }
+  },
 };
 
 // Tasks API
 export const tasksAPI = {
   getAllTasks: async () => {
     try {
-      const response = await api.get('/tasks');
+      const response = await api.get("/tasks");
       return response.data;
     } catch (error) {
-      console.error('Get all tasks error:', error);
+      console.error("Get all tasks error:", error);
       throw error;
     }
   },
-  
+
   getTaskById: async (taskId: number) => {
     try {
       const response = await api.get(`/tasks/${taskId}`);
@@ -120,17 +121,17 @@ export const tasksAPI = {
       throw error;
     }
   },
-  
-  createTask: async (task: Omit<Task, 'id'>) => {
+
+  createTask: async (task: Omit<Task, "id">) => {
     try {
-      const response = await api.post('/tasks', task);
+      const response = await api.post("/tasks", task);
       return response.data;
     } catch (error) {
-      console.error('Create task error:', error);
+      console.error("Create task error:", error);
       throw error;
     }
   },
-  
+
   updateTask: async (taskId: number, task: Partial<Task>) => {
     try {
       const response = await api.put(`/tasks/${taskId}`, task);
@@ -140,7 +141,7 @@ export const tasksAPI = {
       throw error;
     }
   },
-  
+
   deleteTask: async (taskId: number) => {
     try {
       const response = await api.delete(`/tasks/${taskId}`);
@@ -150,43 +151,43 @@ export const tasksAPI = {
       throw error;
     }
   },
-  
+
   markTaskComplete: async (taskId: number) => {
     try {
       const response = await api.patch(`/tasks/${taskId}/complete`, {
-        status: 'Complete',
-        isComplete: true
+        status: "Complete",
+        isComplete: true,
       });
       return response.data;
     } catch (error) {
       console.error(`Mark task ${taskId} complete error:`, error);
       throw error;
     }
-  }
+  },
 };
 
 // Feed API
 export const feedAPI = {
   getFeedPosts: async () => {
     try {
-      const response = await api.get('/feed');
+      const response = await api.get("/feed");
       return response.data;
     } catch (error) {
-      console.error('Get feed posts error:', error);
+      console.error("Get feed posts error:", error);
       throw error;
     }
   },
-  
-  createFeedPost: async (post: Omit<FeedPost, 'id' | 'createdAt'>) => {
+
+  createFeedPost: async (post: Omit<FeedPost, "id" | "createdAt">) => {
     try {
-      const response = await api.post('/feed', post);
+      const response = await api.post("/feed", post);
       return response.data;
     } catch (error) {
-      console.error('Create feed post error:', error);
+      console.error("Create feed post error:", error);
       throw error;
     }
   },
-  
+
   likePost: async (postId: number) => {
     try {
       const response = await api.post(`/feed/${postId}/like`);
@@ -196,7 +197,7 @@ export const feedAPI = {
       throw error;
     }
   },
-  
+
   commentOnPost: async (postId: number, comment: string) => {
     try {
       const response = await api.post(`/feed/${postId}/comment`, { comment });
@@ -205,7 +206,7 @@ export const feedAPI = {
       console.error(`Comment on post ${postId} error:`, error);
       throw error;
     }
-  }
+  },
 };
 
 // User API
@@ -219,7 +220,7 @@ export const userAPI = {
       throw error;
     }
   },
-  
+
   updateUserProfile: async (userId: number, profileData: Partial<User>) => {
     try {
       const response = await api.put(`/users/${userId}`, profileData);
@@ -228,7 +229,7 @@ export const userAPI = {
       console.error(`Update user ${userId} profile error:`, error);
       throw error;
     }
-  }
+  },
 };
 
 // Export a default object with all APIs
@@ -236,7 +237,7 @@ const apiService = {
   auth: authAPI,
   tasks: tasksAPI,
   feed: feedAPI,
-  user: userAPI
+  user: userAPI,
 };
 
-export default apiService; 
+export default apiService;
