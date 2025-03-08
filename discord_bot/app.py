@@ -7,7 +7,7 @@ import supabase
 import openai
 from ImageStore.image_store import ImageStore
 from datetime import datetime
-from OpenAI.server_code import analyze_image
+from OpenAI.server_code import analyze_image, OpenAI_Accountability_Partner
 
 
 
@@ -25,8 +25,9 @@ intents.members = True
 # Create bot instance with command prefix and intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Create ImageStore instance
+# Create instances
 image_store = ImageStore()
+accountability_partner = OpenAI_Accountability_Partner()
 
 @bot.event
 async def on_ready():
@@ -34,7 +35,7 @@ async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
     print(f'Bot ID: {bot.user.id}')
     print('------')
-    print('Bot is ready to receive and analyze images!')
+    print('Bot is ready to receive and analyze task submissions!')
 
 @bot.event
 async def on_message(message):
@@ -47,6 +48,14 @@ async def on_message(message):
     if isinstance(message.channel, discord.DMChannel):
         user_id = str(message.author.id)
         username = message.author.name
+
+        # Get active tasks for the user
+        tasks = await image_store.get_user_tasks(user_id)
+        active_task = next((task for task in tasks if task['status'] == 'in_progress'), None)
+
+        if not active_task:
+            await message.channel.send("You don't have any active tasks. Please create a task first.")
+            return
 
         # Handle any attached images
         if message.attachments:
@@ -66,39 +75,61 @@ async def on_message(message):
                             await image_store.store_message(
                                 user_id=user_id,
                                 username=username,
-                                message_content=message.content or "Image upload",
+                                message_content=message.content or "Task submission",
                                 has_image=True,
-                                image_url=image_url
+                                image_url=image_url,
+                                task_id=active_task['id']
                             )
                             
-                            # Analyze the image using OpenAI
+                            # Analyze the image and generate response
                             try:
                                 # Send a "Processing..." message
-                                processing_msg = await message.channel.send("Processing image with AI... Please wait.")
-                                
-                                # Get custom prompt if provided in the message
-                                custom_prompt = message.content if message.content else "Describe this image in detail"
+                                processing_msg = await message.channel.send("Analyzing your task submission... Please wait.")
                                 
                                 # Analyze the image
-                                analysis = analyze_image(image_url, custom_prompt)
+                                image_analysis = analyze_image(image_url, "Analyze this task submission and describe what work has been done")
                                 
-                                # Send the analysis
-                                await message.channel.send(f"**Image Analysis:**\n{analysis}")
+                                # Generate accountability response
+                                response_data = await accountability_partner.generate_response(
+                                    task_description=active_task['description'],
+                                    due_date=active_task['due_time'],
+                                    submitted_notes=message.content or "",
+                                    image_analysis=image_analysis
+                                )
                                 
-                                # Delete the processing message
+                                # Update task status and scores
+                                if response_data['meets_criteria']:
+                                    await image_store.update_task_status(
+                                        active_task['id'],
+                                        'completed',
+                                        response_data['confidence'],
+                                        response_data['completion']
+                                    )
+                                else:
+                                    await image_store.update_task_status(
+                                        active_task['id'],
+                                        'in_progress',
+                                        response_data['confidence'],
+                                        response_data['completion']
+                                    )
+                                
+                                # Delete processing message
                                 await processing_msg.delete()
                                 
+                                # Send the analysis and response
+                                await message.channel.send(response_data['response'])
+                                
                             except Exception as e:
-                                print(f"Error analyzing image: {str(e)}")
-                                await message.channel.send("Sorry, there was an error analyzing your image.")
+                                print(f"Error analyzing submission: {str(e)}")
+                                await message.channel.send("Sorry, there was an error analyzing your submission.")
                             
-                            print(f"Processed image from {username} (ID: {user_id}): {image_url}")
+                            print(f"Processed submission from {username} (ID: {user_id})")
                         else:
-                            await message.channel.send("Sorry, there was an error uploading your image.")
+                            await message.channel.send("Sorry, there was an error uploading your submission.")
                             
                     except Exception as e:
-                        print(f"Error processing image: {str(e)}")
-                        await message.channel.send("Sorry, there was an error processing your image.")
+                        print(f"Error processing submission: {str(e)}")
+                        await message.channel.send("Sorry, there was an error processing your submission.")
                     
                     break  # Process only the first image for now
             
@@ -108,7 +139,8 @@ async def on_message(message):
                 user_id=user_id,
                 username=username,
                 message_content=message.content,
-                has_image=False
+                has_image=False,
+                task_id=active_task['id']
             )
 
 # Run the bot
