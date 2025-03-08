@@ -51,18 +51,18 @@ export interface UserStats {
  * Mock user for testing authentication
  */
 export const dummyUser = {
-    username: "JDoe321",
-    email: "johndoe@gmail.com",
-    fullName: "John Doe",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=JohnDoe"
+    username: "admin",
+    email: "admin@lockdin.com",
+    fullName: "Admin User",
+    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=AdminUser"
 };
 
 /**
  * Mock credentials for testing login functionality
  */
 export const dummyCredentials = {
-    username: "JDoe321",
-    password: "password"
+    username: "admin",
+    password: "admin"
 };
 
 /**

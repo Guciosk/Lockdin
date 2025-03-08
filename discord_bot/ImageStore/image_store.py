@@ -26,7 +26,7 @@ class ImageStore:
             os.getenv('SUPABASE_KEY')
         )
 
-    async def store_message(self, user_id: str, username: str, message_content: str, has_image: bool = False, image_url: str = None, task_id: str = None):
+    async def store_message(self, user_id: str, username: str, mloessage_content: str, has_image: bool = False, image_url: str = None, task_id: str = None):
         """
         Store a message in the Supabase notes bucket
         """
