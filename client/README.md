@@ -1,104 +1,167 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# LOCKDIN Client
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+This is the frontend application for LOCKDIN, a focus and accountability app designed to help students improve their productivity and achieve their academic goals.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+## Project Structure
 
-## Features
+```
+client/
+├── app/                # Next.js app directory with routes
+├── components/         # React components
+│   ├── ui/             # UI components (buttons, cards, etc.)
+│   ├── dashboard.tsx   # Main dashboard component
+│   ├── login.tsx       # Authentication component
+│   └── landing-page.tsx # Landing page component
+├── lib/                # Utility functions and data
+│   ├── dummy-data.ts   # Mock data for development
+│   └── utils.ts        # Helper functions
+└── utils/              # Additional utilities
+    └── supabase/       # Supabase client configuration
+```
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+## Key Components
 
-## Demo
+### Dashboard
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+The main dashboard component displays:
+- User's upcoming goals with urgency indicators
+- Goal creation form
+- Community feed with other users' goals
+- Leaderboard showing top users by points
+- User statistics and progress
 
-## Deploy to Vercel
+### Login
 
-Vercel deployment will guide you through creating a Supabase account and project.
+Handles user authentication with:
+- Username/password login form
+- Error handling for invalid credentials
+- Redirection to dashboard upon successful login
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+### Landing Page
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+The entry point for new users featuring:
+- App introduction and value proposition
+- Call-to-action buttons
+- Feature highlights
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+## Data Models
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+### Goal
 
-## Clone and run locally
+Represents a goal shared in the community feed:
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+```typescript
+interface Goal {
+    id: number;
+    title: string;
+    description: string;
+    username: string;
+    userImage: string;
+    goalImage: string;
+    dueDate: string;
+    status: string;
+    isComplete: boolean;
+    createdAt: string;
+    likes?: number;
+    comments?: number;
+}
+```
 
-2. Create a Next.js app using the Supabase Starter template npx command
+### UserGoal
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
+Represents a personal goal with urgency level:
+
+```typescript
+interface UserGoal {
+    id: number;
+    title: string;
+    description: string;
+    dueDate: string;
+    urgency: 'high' | 'medium' | 'low';
+    status: string;
+    isComplete: boolean;
+    category: string;
+    createdAt: string;
+}
+```
+
+### UserStats
+
+Tracks user performance and points:
+
+```typescript
+interface UserStats {
+    goals: Goal[];
+    userImage: string;
+    points: number;
+}
+```
+
+## Urgency Calculation
+
+Goals are assigned urgency levels based on their due dates:
+
+- **High**: Due within 2 days
+- **Medium**: Due within 7 days
+- **Low**: Due beyond 7 days
+
+```typescript
+const calculateUrgency = (dueDate: string): 'high' | 'medium' | 'low' => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffTime = due.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 2) return 'high';
+    if (diffDays <= 7) return 'medium';
+    return 'low';
+};
+```
+
+## Points System
+
+Users earn points based on goal completion:
+- 50 points for completed goals
+- 25 points for in-progress goals
+
+```typescript
+const calculatePoints = (goals: Goal[]): number => {
+    return goals.reduce((total: number, goal: Goal) => {
+        if (goal.status === "Complete") return total + 50;
+        return total + 25; // Partial points for in-progress goals
+    }, 0);
+};
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js (v14+)
+- npm or yarn
+
+### Setup
+
+1. Install dependencies:
+   ```
+   npm install
    ```
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
+2. Run the development server:
    ```
-
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
-
-3. Use `cd` to change into the app's directory
-
-   ```bash
-   cd with-supabase-app
-   ```
-
-4. Rename `.env.example` to `.env.local` and update the following:
-
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
-   ```
-
-   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` can be found in [your Supabase project's API settings](https://app.supabase.com/project/_/settings/api)
-
-5. You can now run the Next.js local development server:
-
-   ```bash
    npm run dev
    ```
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+### Mock Data
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+During development, the application uses mock data from `lib/dummy-data.ts`. In production, this would be replaced with API calls to the backend server.
 
-## Feedback and issues
+## Authentication Flow
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
-
-## More Supabase examples
-
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+1. User enters credentials on the login page
+2. If valid, user information is stored in localStorage
+3. User is redirected to the dashboard
+4. Dashboard checks for authentication on load
+5. If not authenticated, user is redirected back to login

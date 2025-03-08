@@ -1,5 +1,6 @@
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { AppProvider } from "@/context/AppContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,7 +27,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <AppProvider>
+            {children}
+          </AppProvider>
         </ThemeProvider>
       </body>
     </html>
