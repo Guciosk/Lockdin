@@ -70,7 +70,6 @@ async def initialize_database():
             print("- due_time (timestamp with time zone)")
             print("- status (varchar)")
             print("- confidence_score (float, optional)")
-            print("- completion_score (float, optional)")
         
         # Check if the users table exists
         try:
@@ -211,8 +210,7 @@ async def on_message(message):
                                     await image_store.update_task_status(
                                         task['id'],
                                         'completed',
-                                        response_data['confidence'],
-                                        response_data['completion']
+                                        response_data['confidence']
                                     )
                                     
                                     # Also update the feed entry status
@@ -246,8 +244,7 @@ async def on_message(message):
                                     await image_store.update_task_status(
                                         task['id'],
                                         'pending',
-                                        response_data['confidence'],
-                                        response_data['completion']
+                                        response_data['confidence']
                                     )
                                     
                                     # Add encouragement to response

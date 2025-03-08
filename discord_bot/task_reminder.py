@@ -11,8 +11,8 @@ class TaskReminder:
         self.bot = bot
         self.image_store = image_store
         self.accountability_partner = accountability_partner
-        # Change to 30-second intervals (0.5 minutes)
-        self.reminder_intervals = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]  # 10 reminders at 30-second intervals
+        # Exactly 30-second intervals for 5 minutes (10 intervals)
+        self.reminder_intervals = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]  # 10 reminders at 30-second intervals (5 minutes total)
         self.active_reminders = {}  # Dictionary to track active reminders by task_id
         self.completed_tasks = set()  # Set to track completed tasks
         
@@ -128,154 +128,89 @@ class TaskReminder:
     
     async def check_past_due_tasks(self):
         """
-        Check for tasks that are past due and haven't been completed
+        Check for tasks that are past due and mark them as failed
         """
         try:
-            # Get current time in UTC
-            now = datetime.utcnow()
-            print(f"Current time (UTC): {now.isoformat()}")
-            
-            # Query Supabase for tasks that are past due
+            # Get all pending tasks
             result = self.image_store.supabase.table('tasks')\
-                .select('*, users(*)')\
+                .select('*, users!inner(*)')\
                 .eq('status', 'pending')\
-                .lt('due_time', now.isoformat())\
                 .execute()
             
-            past_due_tasks = result.data
-            print(f"Found {len(past_due_tasks)} past due tasks")
+            if not result.data:
+                return
             
-            for task in past_due_tasks:
+            now_utc = datetime.utcnow()
+            buffer_minutes = 5  # Add a 5-minute buffer to prevent premature failures
+            
+            for task in result.data:
                 task_id = task['id']
-                due_time_str = task['due_time']
-                description = task['description']
                 
-                # Parse the due time
+                # Skip if this task is already being processed
+                if task_id in self.active_reminders:
+                    continue
+                
                 try:
+                    # Parse the due time
+                    due_time_str = task['due_time']
                     due_time = datetime.fromisoformat(due_time_str.replace('Z', '+00:00'))
-                    print(f"Task {task_id} due time (UTC): {due_time.isoformat()}")
                     
-                    # Convert to New York time for better logging
+                    # Convert to New York time for logging
                     due_time_ny = utc_to_ny(due_time)
-                    print(f"Task {task_id} due time (NY): {format_datetime(due_time_ny, True)}")
                     
-                    # Double-check if the task is actually past due
-                    # Add a 5-minute buffer to avoid marking tasks as failed too early
-                    buffer_time = now - timedelta(minutes=5)
-                    if due_time > buffer_time:
-                        print(f"Task {task_id} is not actually past due or is within buffer period.")
-                        print(f"Due (UTC): {format_datetime(due_time, True)}")
-                        print(f"Now (UTC): {format_datetime(now, True)}")
-                        print(f"Buffer (UTC): {format_datetime(buffer_time, True)}")
-                        continue
-                except Exception as e:
-                    print(f"Error parsing due time for task {task_id}: {str(e)}")
-                    continue
-                
-                # Skip if we've already processed this task
-                if task_id in self.completed_tasks:
-                    print(f"Task {task_id} already processed")
-                    continue
-                
-                # Mark as processed to avoid duplicate handling
-                self.completed_tasks.add(task_id)
-                print(f"Processing past due task {task_id}: {description}")
-                
-                # Get the user associated with this task
-                user_id = task['user_id']
-                
-                # Get the Discord user ID from the users table
-                user_result = self.image_store.supabase.table('users')\
-                    .select('discord_user_id, points')\
-                    .eq('id', user_id)\
-                    .execute()
-                
-                if not user_result.data or len(user_result.data) == 0:
-                    print(f"No user found for task {task_id}")
-                    continue
-                
-                discord_user_id = user_result.data[0]['discord_user_id']
-                
-                if not discord_user_id:
-                    print(f"No Discord user ID for task {task_id}")
-                    continue
-                
-                # Check if there are any image submissions for this task
-                has_submission = False
-                try:
-                    feed_result = self.image_store.supabase.table('feed')\
-                        .select('*')\
-                        .eq('task_id', task_id)\
-                        .not_.is_('image_url', 'null')\
-                        .execute()
+                    # Log the due time for debugging
+                    print(f"Task {task_id} due time (UTC): {due_time.isoformat()}")
+                    print(f"Task {task_id} due time (NY): {due_time_ny.isoformat()}")
+                    print(f"Current time (UTC): {now_utc.isoformat()}")
                     
-                    has_submission = feed_result.data and len(feed_result.data) > 0
-                    print(f"Task {task_id} has image submission: {has_submission}")
-                except Exception as e:
-                    # If the feed table doesn't exist or there's another error, assume no submission
-                    print(f"Error checking feed table: {str(e)}")
-                
-                # Update task status
-                if has_submission:
-                    # Task completed with image submission
-                    await self.image_store.update_task_status(task_id, 'completed')
-                    print(f"Marked task {task_id} as completed")
+                    # Add buffer time (5 minutes)
+                    buffer_time = due_time + timedelta(minutes=buffer_minutes)
                     
-                    # Award points to the user
-                    current_points = user_result.data[0]['points'] or 0
-                    new_points = current_points + 25  # Award 25 points for completion
-                    
-                    # Update user points
-                    self.image_store.supabase.table('users')\
-                        .update({'points': new_points})\
-                        .eq('id', user_id)\
-                        .execute()
-                    
-                    # Notify user
-                    try:
-                        user = await self.bot.fetch_user(int(discord_user_id))
-                        if user:
-                            await user.send(f"🎉 **Task Completed!** You earned 25 points for completing your task: \"{task['description']}\"")
-                            await user.send(f"Your new point total is: {new_points} points")
-                    except Exception as e:
-                        print(f"Error notifying user about completed task: {str(e)}")
-                else:
-                    # Task failed - no image submission
-                    # Only mark as failed if it's significantly past due (more than 5 minutes)
-                    time_diff = now - due_time
-                    minutes_past_due = time_diff.total_seconds() / 60
-                    
-                    if minutes_past_due > 5:
-                        await self.image_store.update_task_status(task_id, 'failed')
-                        print(f"Marked task {task_id} as failed ({minutes_past_due:.2f} minutes past due)")
+                    # Check if the task is past due (with buffer)
+                    if now_utc > buffer_time:
+                        print(f"Task {task_id} is past due. Due: {due_time.isoformat()}, Now: {now_utc.isoformat()}")
                         
-                        # Notify user with AI-generated message
-                        try:
+                        # Check if the task has an image submission
+                        has_image = await self.image_store.check_task_has_image(task_id)
+                        
+                        if not has_image:
+                            # Mark the task as failed
+                            await self.image_store.update_task_status(task_id, 'failed')
+                            
+                            # Get the Discord user
+                            discord_user_id = task['users']['discord_user_id']
                             user = await self.bot.fetch_user(int(discord_user_id))
+                            
                             if user:
-                                # Convert UTC due time to New York time for display
-                                due_time_ny = utc_to_ny(due_time)
-                                
-                                # Format the times for display
-                                due_time_ny_str = format_datetime(due_time_ny, True)
-                                
-                                # Generate AI response for failed task
-                                ai_response = await self.accountability_partner.generate_failure_message(
+                                # Send failure notification
+                                ai_message = await self.accountability_partner.generate_failure_message(
                                     task_description=task['description'],
-                                    due_date=task['due_time'],
-                                    due_time_local=due_time_ny_str
+                                    due_date=due_time_str,
+                                    due_time_local=format_datetime(due_time_ny, True),
+                                    task_id=task_id
                                 )
                                 
-                                await user.send(ai_response)
-                                await user.send("No points were awarded. Remember to submit an image next time to earn points!")
-                        except Exception as e:
-                            print(f"Error notifying user about failed task: {str(e)}")
+                                await user.send(ai_message)
+                                await asyncio.sleep(1)
+                                await user.send(f"To reset this task, use: `!reset_task {task_id}`")
+                                
+                                print(f"Marked task {task_id} as failed and notified user {user.name}")
+                            else:
+                                print(f"Could not find Discord user with ID: {discord_user_id}")
+                        else:
+                            print(f"Task {task_id} has an image submission, not marking as failed")
                     else:
-                        print(f"Task {task_id} is only {minutes_past_due:.2f} minutes past due. Not marking as failed yet.")
-        
+                        # Task is not past due yet
+                        time_left = buffer_time - now_utc
+                        minutes_left = int(time_left.total_seconds() / 60)
+                        print(f"Task {task_id} is not past due yet. {minutes_left} minutes left (with buffer).")
+                
+                except Exception as e:
+                    print(f"Error processing task {task_id}: {str(e)}")
+                    continue
+                    
         except Exception as e:
             print(f"Error checking past due tasks: {str(e)}")
-            # Continue execution even if there's an error
     
     async def start_reminder_sequence(self, task, discord_user_id):
         """
@@ -297,6 +232,9 @@ class TaskReminder:
         # Mark this task as having an active reminder
         self.active_reminders[task_id] = True
         
+        # Initialize conversation history for this task
+        self.accountability_partner.clear_conversation(task_id)
+        
         try:
             # Get the Discord user
             user = await self.bot.fetch_user(int(discord_user_id))
@@ -306,7 +244,7 @@ class TaskReminder:
                 return
             
             # Send initial reminder
-            await self.send_reminder(user, task, 0)
+            await self.send_reminder(user, task, 0, reminder_count=0)
             
             # Send increasingly urgent reminders at intervals
             for i, interval in enumerate(self.reminder_intervals):
@@ -318,65 +256,43 @@ class TaskReminder:
                 
                 # Check if there are any image submissions for this task
                 try:
-                    feed_result = self.image_store.supabase.table('feed')\
-                        .select('*')\
-                        .eq('task_id', task_id)\
-                        .not_.is_('image_url', 'null')\
-                        .execute()
-                    
-                    has_submission = feed_result.data and len(feed_result.data) > 0
-                    
-                    # Skip if the task already has an image submission
-                    if has_submission:
+                    has_image = await self.image_store.check_task_has_image(task_id)
+                    if has_image:
                         print(f"Task {task_id} has an image submission. Stopping reminders.")
                         break
                 except Exception as e:
-                    # If the feed table doesn't exist or there's another error, continue anyway
-                    print(f"Error checking feed table: {str(e)}")
+                    print(f"Error checking if task has image: {str(e)}")
                 
-                # Wait for the specified interval (convert to seconds)
-                await asyncio.sleep(interval * 60)
+                # Wait for the specified interval
+                await asyncio.sleep(interval * 60)  # Convert minutes to seconds
                 
-                # Check again if task is still pending
+                # Check again if task is still pending and has no image
                 task_status = await self.check_task_status(task_id)
                 if task_status != 'pending':
                     print(f"Task {task_id} is no longer pending. Stopping reminders.")
                     break
                 
-                # Check again for image submissions
                 try:
-                    feed_result = self.image_store.supabase.table('feed')\
-                        .select('*')\
-                        .eq('task_id', task_id)\
-                        .not_.is_('image_url', 'null')\
-                        .execute()
-                    
-                    has_submission = feed_result.data and len(feed_result.data) > 0
-                    
-                    # Skip if the task already has an image submission
-                    if has_submission:
+                    has_image = await self.image_store.check_task_has_image(task_id)
+                    if has_image:
                         print(f"Task {task_id} has an image submission. Stopping reminders.")
                         break
                 except Exception as e:
-                    # If the feed table doesn't exist or there's another error, continue anyway
-                    print(f"Error checking feed table: {str(e)}")
+                    print(f"Error checking if task has image: {str(e)}")
                 
-                # Check if we're past the due time
-                now = datetime.utcnow()
-                if now > due_time:
-                    print(f"Task {task_id} is now past due. Due: {due_time.isoformat()}, Now: {now.isoformat()}")
-                    # Task is past due, send final reminder
-                    await self.send_past_due_reminder(user, task)
-                    break
+                # Send next reminder with increased urgency
+                reminder_count = i + 1  # Reminder count starts at 0 for the initial reminder
+                await self.send_reminder(user, task, min(10, i + 1), reminder_count=reminder_count)
+            
+            # Clear the active reminder flag
+            if task_id in self.active_reminders:
+                del self.active_reminders[task_id]
                 
-                # Send the next reminder with increased urgency
-                await self.send_reminder(user, task, i + 1)
+            # Clear conversation history after the sequence is complete
+            self.accountability_partner.clear_conversation(task_id)
             
         except Exception as e:
             print(f"Error in reminder sequence for task {task_id}: {str(e)}")
-        
-        finally:
-            # Remove from active reminders when done
             if task_id in self.active_reminders:
                 del self.active_reminders[task_id]
     
@@ -399,11 +315,12 @@ class TaskReminder:
             print(f"Error checking task status: {str(e)}")
             return None
     
-    async def send_reminder(self, user, task, urgency_level):
+    async def send_reminder(self, user, task, urgency_level, reminder_count=0):
         """
         Send a reminder message with appropriate urgency level using AI
         """
         try:
+            task_id = task['id']
             description = task['description']
             due_time = datetime.fromisoformat(task['due_time'].replace('Z', '+00:00'))
             
@@ -427,32 +344,27 @@ class TaskReminder:
                 task_description=description,
                 time_remaining=time_remaining,
                 urgency_level=urgency_level,
-                due_time_local=due_time_ny_str
+                due_time_local=due_time_ny_str,
+                task_id=task_id,
+                reminder_count=reminder_count
             )
             
             # Send the AI-generated message
             await user.send(ai_message)
             
-            # For higher urgency levels, send additional messages
-            if urgency_level >= 5:
-                await asyncio.sleep(1)  # Wait a second
-                additional_message = await self.accountability_partner.generate_urgent_message(
-                    task_description=description,
-                    time_remaining=time_remaining,
-                    due_time_local=due_time_ny_str
-                )
-                await user.send(additional_message)
+            # For higher urgency levels, we don't need additional messages since we're using Gordon Ramsay progression
             
-            print(f"Sent level {urgency_level} reminder to {user.name} for task {task['id']}")
+            print(f"Sent level {urgency_level} reminder (count: {reminder_count}) to {user.name} for task {task_id}")
             
         except Exception as e:
             print(f"Error sending reminder: {str(e)}")
     
     async def send_past_due_reminder(self, user, task):
         """
-        Send a reminder for a task that is past due using AI
+        Send a reminder for a task that is past due
         """
         try:
+            task_id = task['id']
             description = task['description']
             due_time = datetime.fromisoformat(task['due_time'].replace('Z', '+00:00'))
             
@@ -465,16 +377,22 @@ class TaskReminder:
             # Generate AI past due message
             ai_message = await self.accountability_partner.generate_past_due_message(
                 task_description=description,
-                due_time_local=due_time_ny_str
+                due_time_local=due_time_ny_str,
+                task_id=task_id
             )
             
+            # Send the AI-generated message
             await user.send(ai_message)
-            await asyncio.sleep(1)
-            await user.send("⚠️ **LAST CHANCE TO SUBMIT YOUR PROOF!** ⚠️")
-            await asyncio.sleep(1)
-            await user.send("📸 **SEND AN IMAGE NOW OR LOSE POINTS!** 📸")
             
-            print(f"Sent past due reminder to {user.name} for task {task['id']}")
+            # Send additional reminder about submitting proof
+            await asyncio.sleep(1)  # Wait a second
+            await user.send("Remember, you can still submit proof of completion by sending an image in this DM!")
+            
+            # Send another reminder about resetting the task
+            await asyncio.sleep(1)  # Wait another second
+            await user.send(f"If you need more time, you can reset this task using: `!reset_task {task_id}`")
+            
+            print(f"Sent past due reminder to {user.name} for task {task_id}")
             
         except Exception as e:
             print(f"Error sending past due reminder: {str(e)}") 

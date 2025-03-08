@@ -150,13 +150,13 @@ class ImageStore:
             print(f"Error retrieving user tasks from Supabase: {str(e)}")
             return []
 
-    async def update_task_status(self, task_id: str, status: str, confidence: float = None, completion: float = None):
+    async def update_task_status(self, task_id, status, confidence=None, completion=None):
         """
-        Update task status and scores
+        Update the status of a task in the database
         
-        Status can be:
-        - 'pending': Task is still pending completion
-        - 'completed': Task has been completed successfully
+        Status can be one of:
+        - 'active': Task is active and pending completion
+        - 'completed': Task has been completed
         - 'failed': Task was not completed by the due date
         """
         try:
@@ -165,8 +165,9 @@ class ImageStore:
             }
             if confidence is not None:
                 data['confidence_score'] = confidence
-            if completion is not None:
-                data['completion_score'] = completion
+            # Remove the completion_score field as it doesn't exist in the database schema
+            # if completion is not None:
+            #     data['completion_score'] = completion
 
             result = self.supabase.table('tasks')\
                 .update(data)\
