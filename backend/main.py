@@ -72,3 +72,7 @@ async def get_all_feed_posts():
         raise HTTPException(status_code=404, detail="No feed posts found")
     feed_posts = [FeedPost(**post) for post in response.data]
     return feed_posts
+
+# @app.get()
+# async def send_sms(phone_number: str):
+    
