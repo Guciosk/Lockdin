@@ -13,7 +13,7 @@ the discord user id of the sender of the image. when it finds that user,
 it extracts the user_id from it.
 now that it has the user_id, 
 it looks through tasks table and queries the task whose user_id matches the user_id the bot got. 
-if it cant find the task, the bot responds saying “You don't have any active tasks. Please create a task first.”
+if it cant find the task, the bot responds saying "You don't have any active tasks. Please create a task first."
 
 '''
 
@@ -26,7 +26,7 @@ class ImageStore:
             os.getenv('SUPABASE_KEY')
         )
 
-    async def store_message(self, user_id: str, username: str, mloessage_content: str, has_image: bool = False, image_url: str = None, task_id: str = None):
+    async def store_message(self, user_id: str, username: str = None, message_content: str = "", has_image: bool = False, image_url: str = None, task_id: str = None):
         """
         Store a message in the Supabase notes bucket
         """
@@ -87,27 +87,47 @@ class ImageStore:
         Retrieve a task from the tasks table by user_id
         """
         try:
-            user = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
-            user_id = user.data[0]['id'] 
-            result = self.supabase.table('tasks').select('*').eq('user_id', user_id).execute()
-            return result.data
+            # Get the user by discord_user_id
+            user_result = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
+            
+            # Check if user exists
+            if not user_result.data or len(user_result.data) == 0:
+                print(f"No user found with discord_user_id: {discord_user_id}")
+                return []
+            
+            user_id = user_result.data[0]['id'] 
+            
+            # Get tasks for the user
+            task_result = self.supabase.table('tasks').select('*').eq('user_id', user_id).execute()
+            return task_result.data
         except Exception as e:
             print(f"Error retrieving task from Supabase: {str(e)}")
-            return None
+            return []
 
     
 
-    async def get_user_tasks(self, user_id: str):
+    async def get_user_tasks(self, discord_user_id: str):
         """
         Retrieve all tasks for a specific user
         """
         try:
-            result = self.supabase.table('tasks')\
+            # First, get the user by discord_user_id
+            user_result = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
+            
+            # Check if user exists
+            if not user_result.data or len(user_result.data) == 0:
+                print(f"No user found with discord_user_id: {discord_user_id}")
+                return []
+            
+            user_id = user_result.data[0]['id']
+            
+            # Get tasks for the user
+            task_result = self.supabase.table('tasks')\
                 .select('*')\
                 .eq('user_id', user_id)\
                 .order('due_time', desc=True)\
                 .execute()
-            return result.data
+            return task_result.data
         except Exception as e:
             print(f"Error retrieving user tasks from Supabase: {str(e)}")
             return []
