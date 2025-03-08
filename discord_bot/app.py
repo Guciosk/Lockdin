@@ -9,6 +9,7 @@ from ImageStore.image_store import ImageStore
 from datetime import datetime, timedelta
 from OpenAI.server_code import analyze_image, OpenAI_Accountability_Partner
 from task_reminder import TaskReminder
+from utils import ny_to_utc, utc_to_ny, format_datetime, is_dst_in_eastern_time
 
 
 
@@ -29,7 +30,74 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 # Create instances
 image_store = ImageStore()
 accountability_partner = OpenAI_Accountability_Partner()
-task_reminder = TaskReminder(bot, image_store)
+task_reminder = TaskReminder(bot, image_store, accountability_partner)
+
+async def initialize_database():
+    """
+    Initialize the necessary tables in the database if they don't exist
+    """
+    try:
+        # Check if the feed table exists
+        try:
+            image_store.supabase.table('feed').select('*').limit(1).execute()
+            print("Feed table exists")
+        except Exception as e:
+            print(f"Feed table doesn't exist or error: {str(e)}")
+            print("Creating feed table...")
+            # We can't create tables through the Supabase JS client, so we'll just log a message
+            print("Please create the feed table manually in the Supabase dashboard with the following columns:")
+            print("- id (int8, primary key)")
+            print("- created_at (timestamp with time zone)")
+            print("- user_id (int8)")
+            print("- task_id (int8)")
+            print("- image_url (text)")
+            print("- status (varchar)")
+            print("- timestamp (timestamp with time zone)")
+            print("- post_content (text)")
+        
+        # Check if the tasks table exists
+        try:
+            image_store.supabase.table('tasks').select('*').limit(1).execute()
+            print("Tasks table exists")
+        except Exception as e:
+            print(f"Tasks table doesn't exist or error: {str(e)}")
+            print("Creating tasks table...")
+            print("Please create the tasks table manually in the Supabase dashboard with the following columns:")
+            print("- id (int8, primary key)")
+            print("- created_at (timestamp with time zone)")
+            print("- user_id (int8)")
+            print("- description (text)")
+            print("- due_time (timestamp with time zone)")
+            print("- status (varchar)")
+            print("- confidence_score (float, optional)")
+            print("- completion_score (float, optional)")
+        
+        # Check if the users table exists
+        try:
+            image_store.supabase.table('users').select('*').limit(1).execute()
+            print("Users table exists")
+        except Exception as e:
+            print(f"Users table doesn't exist or error: {str(e)}")
+            print("Creating users table...")
+            print("Please create the users table manually in the Supabase dashboard with the following columns:")
+            print("- id (int8, primary key)")
+            print("- created_at (timestamp with time zone)")
+            print("- username (varchar)")
+            print("- discord_user_id (varchar)")
+            print("- points (int8)")
+            print("- phone_number (varchar)")
+        
+        # Check if the notes bucket exists by trying to list files
+        try:
+            # Try to list files in the bucket instead of getting bucket info
+            image_store.supabase.storage.from_('notes').list()
+            print("Notes bucket exists and is accessible")
+        except Exception as e:
+            print(f"Notes bucket doesn't exist or error: {str(e)}")
+            print("Please ensure the 'notes' bucket exists in the Supabase storage and is publicly accessible")
+    
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
 
 @bot.event
 async def on_ready():
@@ -38,6 +106,9 @@ async def on_ready():
     print(f'Bot ID: {bot.user.id}')
     print('------')
     print('Bot is ready to receive and analyze task submissions!')
+    
+    # Initialize the database
+    await initialize_database()
     
     # Start the task reminder background task
     bot.loop.create_task(task_reminder.check_upcoming_tasks())
@@ -58,14 +129,33 @@ async def on_message(message):
         discord_user_id = str(message.author.id)
         username = message.author.name
         
-
         # Get active tasks for the user
         tasks = await image_store.get_user_tasks(discord_user_id)
         
+        # If the message starts with a command prefix, don't process it as a regular message
+        if message.content.startswith('!'):
+            return
+            
         if not tasks:
             await message.channel.send("You don't have any active tasks or your Discord account is not linked to a Lockdin account.")
             await message.channel.send("To create a new account, use: `!create_account <username>`")
             await message.channel.send("To link an existing account, use: `!link <username>`")
+            return
+            
+        # Filter for pending tasks only
+        pending_tasks = [task for task in tasks if task['status'] == 'pending']
+        
+        if not pending_tasks:
+            await message.channel.send("You don't have any pending tasks. Use `!create_task` to create a new task.")
+            return
+        
+        # Get the first pending task
+        task = pending_tasks[0]
+        
+        # Check if the task already has an image submission
+        has_image = await image_store.check_task_has_image(task['id'])
+        if has_image:
+            await message.channel.send(f"You've already submitted an image for your task: \"{task['description']}\". It's being processed.")
             return
 
         # Handle any attached images
@@ -82,14 +172,22 @@ async def on_message(message):
                         image_url = await image_store.store_image(image_data, filename)
                         
                         if image_url:
+                            # Check if this is a placeholder URL due to storage error
+                            is_placeholder = "placeholder.com" in image_url
+                            if is_placeholder:
+                                await message.channel.send("⚠️ Warning: There was an issue storing your image in our storage system, but we'll continue processing your submission.")
+                            
+                            # Get the first pending task
+                            task = pending_tasks[0]
+                            
                             # Store the message with image info in Supabase
                             await image_store.store_message(
-                                user_id=str(discord_user_id),
+                                user_id=task['user_id'],
                                 username=username,
                                 message_content=message.content or "Task submission",
                                 has_image=True,
                                 image_url=image_url,
-                                task_id=tasks[0]['id']  # Use the first pending task
+                                task_id=task['id']
                             )
                             
                             # Analyze the image and generate response
@@ -102,8 +200,8 @@ async def on_message(message):
                                 
                                 # Generate accountability response
                                 response_data = await accountability_partner.generate_response(
-                                    task_description=tasks[0]['description'],
-                                    due_date=tasks[0]['due_time'],
+                                    task_description=task['description'],
+                                    due_date=task['due_time'],
                                     submitted_notes=message.content or "",
                                     image_analysis=image_analysis
                                 )
@@ -111,18 +209,49 @@ async def on_message(message):
                                 # Update task status and scores
                                 if response_data['meets_criteria']:
                                     await image_store.update_task_status(
-                                        tasks[0]['id'],
+                                        task['id'],
                                         'completed',
                                         response_data['confidence'],
                                         response_data['completion']
                                     )
+                                    
+                                    # Also update the feed entry status
+                                    try:
+                                        image_store.supabase.table('feed')\
+                                            .update({'status': 'completed'})\
+                                            .eq('task_id', task['id'])\
+                                            .execute()
+                                    except Exception as e:
+                                        print(f"Error updating feed status: {str(e)}")
+                                    
+                                    # Award points to the user
+                                    user_result = image_store.supabase.table('users')\
+                                        .select('points')\
+                                        .eq('discord_user_id', discord_user_id)\
+                                        .execute()
+                                    
+                                    if user_result.data and len(user_result.data) > 0:
+                                        current_points = user_result.data[0]['points'] or 0
+                                        new_points = current_points + 25  # Award 25 points for completion
+                                        
+                                        # Update user points
+                                        image_store.supabase.table('users')\
+                                            .update({'points': new_points})\
+                                            .eq('discord_user_id', discord_user_id)\
+                                            .execute()
+                                        
+                                        # Add points info to response
+                                        response_data['response'] += f"\n\n🎉 **Congratulations!** You earned 25 points for completing this task!\nYour new point total is: {new_points} points"
                                 else:
                                     await image_store.update_task_status(
-                                        tasks[0]['id'],
+                                        task['id'],
                                         'pending',
                                         response_data['confidence'],
                                         response_data['completion']
                                     )
+                                    
+                                    # Add encouragement to response
+                                    response_data['response'] += "\n\nYour submission doesn't fully meet the criteria for this task. Please try again with a more complete submission to earn points."
                                 
                                 # Delete processing message
                                 await processing_msg.delete()
@@ -146,13 +275,21 @@ async def on_message(message):
             
         elif message.content:  # Store text messages without images
             # Store the message in Supabase
-            await image_store.store_message(
-                user_id=str(discord_user_id),
-                username=username,
-                message_content=message.content,
-                has_image=False,
-                task_id=tasks[0]['id']
-            )
+            if pending_tasks:
+                await image_store.store_message(
+                    user_id=pending_tasks[0]['user_id'],
+                    username=username,
+                    message_content=message.content,
+                    has_image=False,
+                    image_url=None,
+                    task_id=pending_tasks[0]['id']
+                )
+                
+                # Remind the user that they need to submit an image
+                await message.channel.send("I've recorded your message, but remember that you need to submit an image to complete your task and earn points!")
+                await message.channel.send("Please attach an image showing your completed task.")
+            else:
+                await message.channel.send("You don't have any pending tasks. Use `!create_task` to create a new task.")
 
 # Add a command to manually test the reminder system
 @bot.command(name='testreminder')
@@ -188,14 +325,30 @@ async def test_reminder(ctx, task_id: str = None):
         test_task = task.copy()
         test_task['due_time'] = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
         
-        await ctx.send(f"Testing reminder system with task: {test_task['description']}")
+        await ctx.send(f"Testing AI-generated reminder system with task: **{test_task['description']}**")
+        await ctx.send("You will receive a series of increasingly urgent AI-generated reminders.")
+        await ctx.send("These reminders simulate what you would receive as your task deadline approaches.")
+        await ctx.send("Each reminder will become more aggressive as the urgency increases.")
         
         # Send test reminders with increasing urgency
-        for i in range(5):
+        for i in range(8):
+            await ctx.send(f"\n**Testing urgency level {i}:**")
             await task_reminder.send_reminder(ctx.author, test_task, i)
-            await asyncio.sleep(2)  # Short delay between test messages
+            await asyncio.sleep(3)  # Longer delay between test messages for readability
         
-        await ctx.send("Reminder test complete!")
+        # Also test the past due reminder
+        await ctx.send("\n**Testing past due reminder:**")
+        await task_reminder.send_past_due_reminder(ctx.author, test_task)
+        
+        # Also test the failure message
+        await ctx.send("\n**Testing failure message:**")
+        failure_message = await accountability_partner.generate_failure_message(
+            task_description=test_task['description'],
+            due_date=test_task['due_time']
+        )
+        await ctx.send(failure_message)
+        
+        await ctx.send("\nReminder test complete! This demonstrates how the AI will remind you about upcoming tasks with increasing urgency.")
         
     except Exception as e:
         print(f"Error testing reminder: {str(e)}")
@@ -331,27 +484,44 @@ This bot helps you stay accountable for your tasks in Lockdin. Here are the avai
 
 **Task Management:**
 • `!create_task <description> | <YYYY-MM-DD HH:MM>` - Create a new task with description and due date
-• `!tasks` - View your pending tasks
-• `!testreminder [task_id]` - Test the reminder system with a specific task or your first pending task
+• `!tasks [status]` - View your tasks (optional: specify 'pending', 'completed', or 'failed')
+• `!reset_task <task_id>` - Reset a task's status to pending if it was incorrectly marked as failed
+• `!testreminder [task_id]` - Test the AI reminder system with a specific task or your first pending task
 
-**Help:**
+**System Commands:**
 • `!help` - Show this help message
+• `!storage_status` - Check the status of the storage system (for troubleshooting)
 
 **How to use:**
 1. First, create an account with `!create_account <username>` or link your existing account with `!link <username>`
 2. Create tasks using `!create_task` or in the Lockdin app
-3. The bot will remind you when tasks are due within 5 minutes
-4. Submit task completions by sending a message or image in this DM
+3. The AI will remind you when tasks are due within 5 minutes
+4. Submit task completions by sending an image in this DM
 
-**Task Submission:**
-• Send a message describing your task completion
-• Send an image showing your completed task
-• The bot will analyze your submission and update your task status
+**Task Submission & Points:**
+• You MUST submit an image showing your completed task to earn points
+• Text-only submissions will not earn points
+• You'll earn 25 points for each completed task
+• If you don't submit an image by the due date, the task will be marked as failed
+• If a task is incorrectly marked as failed, use `!reset_task <task_id>` to reset it
+
+**AI Reminder System:**
+• The AI sends dynamic, personalized reminders every 30 seconds when a task is due within 5 minutes
+• Reminders become increasingly urgent and aggressive as the deadline approaches
+• The AI adapts its tone and language based on the urgency level
+• Multiple reminder messages will be sent for urgent deadlines
+• Past due tasks will receive final AI-generated reminders to submit proof immediately
 
 **Examples:**
 • `!create_account john_doe`
 • `!create_task Complete math homework | 2023-12-31 23:59`
-• `!tasks`
+• `!tasks pending`
+• `!reset_task 123`
+
+**Time Zones:**
+• All times are entered in New York time (Eastern Time)
+• The system automatically converts to UTC for storage
+• Due dates are displayed in both New York time and UTC
 
 For more help, visit the Lockdin website or contact support.
 """
@@ -359,8 +529,8 @@ For more help, visit the Lockdin website or contact support.
 
 # Add a command to view pending tasks
 @bot.command(name='tasks')
-async def view_tasks(ctx):
-    """View your pending tasks"""
+async def view_tasks(ctx, status: str = None):
+    """View your tasks (optional: specify 'pending', 'completed', or 'failed')"""
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("This command can only be used in DMs.")
         return
@@ -369,7 +539,7 @@ async def view_tasks(ctx):
     
     try:
         # Get tasks for the user
-        tasks = await image_store.find_task_by_user_id(discord_user_id)
+        tasks = await image_store.get_user_tasks(discord_user_id)
         
         if not tasks:
             await ctx.send("You don't have any tasks or your Discord account is not linked to a Lockdin account.")
@@ -377,31 +547,69 @@ async def view_tasks(ctx):
             await ctx.send("To link an existing account, use: `!link <username>`")
             return
         
-        # Filter by status
-        pending_tasks = [task for task in tasks if task['status'] == 'pending']
-        completed_tasks = [task for task in tasks if task['status'] == 'completed']
+        # Filter by status if specified
+        if status:
+            status = status.lower()
+            if status in ['pending', 'completed', 'failed']:
+                tasks = [task for task in tasks if task['status'].lower() == status]
+            else:
+                await ctx.send(f"Invalid status: {status}. Please use 'pending', 'completed', or 'failed'.")
+                return
         
-        if not pending_tasks and not completed_tasks:
-            await ctx.send("You don't have any tasks.")
-            return
+        # Separate tasks by status
+        pending_tasks = [task for task in tasks if task['status'].lower() == 'pending']
+        completed_tasks = [task for task in tasks if task['status'].lower() == 'completed']
+        failed_tasks = [task for task in tasks if task['status'].lower() == 'failed']
         
-        # Format and send pending tasks
-        if pending_tasks:
-            pending_list = "\n".join([f"• **{task['description']}**\n  Due: {task['due_time']}\n  ID: {task['id']}" for task in pending_tasks[:5]])
-            await ctx.send(f"**Your Pending Tasks ({len(pending_tasks)}):**\n{pending_list}")
-            
-            if len(pending_tasks) > 5:
-                await ctx.send(f"...and {len(pending_tasks) - 5} more pending tasks.")
-        else:
-            await ctx.send("You don't have any pending tasks.")
+        # Convert UTC times to New York time for display
+        for task_list in [pending_tasks, completed_tasks, failed_tasks]:
+            for task in task_list:
+                try:
+                    due_time = datetime.fromisoformat(task['due_time'].replace('Z', '+00:00'))
+                    
+                    # Convert to New York time using our utility function
+                    due_time_ny = utc_to_ny(due_time)
+                    
+                    # Add formatted time strings to the task
+                    task['due_time_ny'] = format_datetime(due_time_ny, True)
+                    task['due_time_utc'] = format_datetime(due_time, True)
+                except Exception as e:
+                    task['due_time_ny'] = "Unknown"
+                    task['due_time_utc'] = "Unknown"
+                    print(f"Error converting time for task {task['id']}: {str(e)}")
         
-        # Format and send completed tasks (limited to 3)
-        if completed_tasks:
-            completed_list = "\n".join([f"• {task['description']} (Completed)" for task in completed_tasks[:3]])
-            await ctx.send(f"**Recently Completed Tasks ({len(completed_tasks)}):**\n{completed_list}")
-            
-            if len(completed_tasks) > 3:
-                await ctx.send(f"...and {len(completed_tasks) - 3} more completed tasks.")
+        # Display tasks based on what was requested or show all by default
+        if status == 'pending' or not status:
+            if pending_tasks:
+                await ctx.send(f"**Your Pending Tasks ({len(pending_tasks)}):**")
+                for i, task in enumerate(pending_tasks, 1):
+                    await ctx.send(f"{i}. **{task['description']}**\n   Due: {task['due_time_ny']} (New York time)\n   ID: {task['id']}\n   Status: {task['status']}")
+            elif not status:  # Only show this message if no status was specified
+                await ctx.send("You don't have any pending tasks.")
+        
+        if status == 'completed' or not status:
+            if completed_tasks:
+                await ctx.send(f"**Your Completed Tasks ({len(completed_tasks)}):**")
+                for i, task in enumerate(completed_tasks, 1):
+                    await ctx.send(f"{i}. **{task['description']}**\n   Due: {task['due_time_ny']} (New York time)\n   ID: {task['id']}\n   Status: {task['status']}")
+            elif not status:  # Only show this message if no status was specified
+                await ctx.send("You don't have any completed tasks.")
+        
+        if status == 'failed' or not status:
+            if failed_tasks:
+                await ctx.send(f"**Your Failed Tasks ({len(failed_tasks)}):**")
+                for i, task in enumerate(failed_tasks, 1):
+                    await ctx.send(f"{i}. **{task['description']}**\n   Due: {task['due_time_ny']} (New York time)\n   ID: {task['id']}\n   Status: {task['status']}")
+            elif not status:  # Only show this message if no status was specified
+                await ctx.send("You don't have any failed tasks.")
+        
+        # If no tasks were found for the specified status
+        if status and not (pending_tasks or completed_tasks or failed_tasks):
+            await ctx.send(f"You don't have any {status} tasks.")
+        
+        # Add a note about resetting failed tasks
+        if failed_tasks and (status == 'failed' or not status):
+            await ctx.send("\nTo reset a failed task to pending, use: `!reset_task <task_id>`")
     
     except Exception as e:
         print(f"Error viewing tasks: {str(e)}")
@@ -446,15 +654,25 @@ async def create_task(ctx, *, task_info: str = None):
     due_date_str = parts[1].strip()
     
     try:
-        # Parse the due date
+        # Parse the due date (in New York time)
         due_date = datetime.strptime(due_date_str, "%Y-%m-%d %H:%M")
-        due_date_utc = due_date.isoformat()
         
-        # Create the task
+        # Convert New York time to UTC using our utility function
+        due_date_utc = ny_to_utc(due_date)
+        
+        # Check if the due date is in DST for logging
+        is_dst = is_dst_in_eastern_time(due_date)
+        print(f"Due date: {due_date}, Is DST: {is_dst}, UTC: {due_date_utc}")
+        
+        # Format for display
+        ny_time_str = format_datetime(due_date, True)
+        utc_time_str = format_datetime(due_date_utc, True)
+        
+        # Create the task with UTC time
         task_data = {
             'user_id': user_id,
             'description': description,
-            'due_time': due_date_utc,
+            'due_time': due_date_utc.isoformat(),
             'status': 'pending',
             'created_at': datetime.utcnow().isoformat()
         }
@@ -467,7 +685,7 @@ async def create_task(ctx, *, task_info: str = None):
             task_id = result.data[0]['id']
             await ctx.send(f"✅ Task created successfully! Task ID: {task_id}")
             await ctx.send(f"Description: {description}")
-            await ctx.send(f"Due date: {due_date_str}")
+            await ctx.send(f"Due date: {ny_time_str} (New York time) or {utc_time_str} (UTC)")
             await ctx.send("You'll receive reminders as the due date approaches.")
         else:
             await ctx.send("Failed to create task. Please try again.")
@@ -478,6 +696,106 @@ async def create_task(ctx, *, task_info: str = None):
     except Exception as e:
         print(f"Error creating task: {str(e)}")
         await ctx.send(f"An error occurred while creating your task: {str(e)}")
+
+# Add a command to check the storage status
+@bot.command(name='storage_status')
+async def storage_status(ctx):
+    """Check the status of the storage system"""
+    if not isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send("This command can only be used in DMs for security reasons.")
+        return
+    
+    try:
+        # Check if the notes bucket exists
+        try:
+            files = image_store.supabase.storage.from_('notes').list()
+            await ctx.send(f"✅ Notes bucket exists and is accessible.")
+            await ctx.send(f"Found {len(files)} files in the bucket.")
+            
+            # List a few files as examples
+            if files:
+                file_list = "\n".join([f"- {file.get('name')}" for file in files[:5]])
+                await ctx.send(f"Sample files:\n{file_list}")
+                if len(files) > 5:
+                    await ctx.send(f"...and {len(files) - 5} more files.")
+        except Exception as e:
+            await ctx.send(f"❌ Error accessing notes bucket: {str(e)}")
+            
+            # Try to create the bucket
+            try:
+                image_store.supabase.storage.create_bucket('notes', {'public': True})
+                await ctx.send("✅ Created notes bucket successfully.")
+            except Exception as create_error:
+                await ctx.send(f"❌ Could not create notes bucket: {str(create_error)}")
+                await ctx.send("Please create the notes bucket manually in the Supabase dashboard.")
+        
+        # Check if the feed table exists
+        try:
+            result = image_store.supabase.table('feed').select('*').limit(5).execute()
+            await ctx.send(f"✅ Feed table exists and has {len(result.data)} entries (showing up to 5).")
+        except Exception as e:
+            await ctx.send(f"❌ Error accessing feed table: {str(e)}")
+        
+        # Check if the tasks table exists
+        try:
+            result = image_store.supabase.table('tasks').select('*').limit(5).execute()
+            await ctx.send(f"✅ Tasks table exists and has {len(result.data)} entries (showing up to 5).")
+        except Exception as e:
+            await ctx.send(f"❌ Error accessing tasks table: {str(e)}")
+        
+        # Check if the users table exists
+        try:
+            result = image_store.supabase.table('users').select('*').limit(5).execute()
+            await ctx.send(f"✅ Users table exists and has {len(result.data)} entries (showing up to 5).")
+        except Exception as e:
+            await ctx.send(f"❌ Error accessing users table: {str(e)}")
+    
+    except Exception as e:
+        await ctx.send(f"❌ Error checking storage status: {str(e)}")
+
+# Add a command to reset a task's status
+@bot.command(name='reset_task')
+async def reset_task(ctx, task_id: str = None):
+    """Reset a task's status to pending"""
+    if not isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send("This command can only be used in DMs for security reasons.")
+        return
+    
+    if not task_id:
+        await ctx.send("Please provide a task ID. Example: `!reset_task 123`")
+        return
+    
+    discord_user_id = str(ctx.author.id)
+    
+    try:
+        # Get the user's tasks
+        tasks = await image_store.get_user_tasks(discord_user_id)
+        
+        # Find the specific task
+        task = next((t for t in tasks if str(t['id']) == task_id), None)
+        
+        if not task:
+            await ctx.send(f"No task found with ID {task_id} for your account.")
+            return
+        
+        # Get the current status
+        current_status = task['status']
+        
+        # Reset the task status to pending
+        result = image_store.supabase.table('tasks')\
+            .update({'status': 'pending'})\
+            .eq('id', task_id)\
+            .execute()
+        
+        if result.data:
+            await ctx.send(f"✅ Task '{task['description']}' has been reset from '{current_status}' to 'pending'.")
+            await ctx.send("You can now submit an image for this task.")
+        else:
+            await ctx.send("Failed to reset task. Please try again.")
+    
+    except Exception as e:
+        print(f"Error resetting task: {str(e)}")
+        await ctx.send(f"An error occurred while resetting the task: {str(e)}")
 
 # Run the bot
 if __name__ == "__main__":
