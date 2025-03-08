@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request, Form, File, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from supabase_client import supabase
+
 from sms_service import (
     send_whatsapp_message, 
     process_incoming_message, 
@@ -12,6 +13,9 @@ from sms_service import (
 from typing import Dict, List, Optional
 import json
 import os
+
+from openAI.openaiapi import generate_image_prompt
+
 
 app = FastAPI()
 
