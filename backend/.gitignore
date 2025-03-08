@@ -5,3 +5,4 @@ __pycache__/
 instance/
 venv/
 *.sqlite3
+my_env/
