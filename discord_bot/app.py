@@ -51,9 +51,11 @@ async def on_message(message):
 
         # Get active tasks for the user
         tasks = await image_store.get_user_tasks(user_id)
-        active_task = next((task for task in tasks if task['status'] == 'in_progress'), None)
+        active_task = next((task for task in tasks if task['status'] == 'pending'), None)
 
-        if not active_task:
+        # Get active tasks for the user using their user_id from users table
+        tasks = await image_store.get_user_tasks(user['id'])
+        if not tasks:
             await message.channel.send("You don't have any active tasks. Please create a task first.")
             return
 
@@ -66,19 +68,19 @@ async def on_message(message):
                         image_data = await attachment.read()
                         # Generate a unique filename using timestamp
                         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                        filename = f"{user_id}_{timestamp}_{attachment.filename}"
+                        filename = f"{user['id']}_{timestamp}_{attachment.filename}"
                         # Store the image
                         image_url = await image_store.store_image(image_data, filename)
                         
                         if image_url:
                             # Store the message with image info in Supabase
                             await image_store.store_message(
-                                user_id=user_id,
+                                user_id=str(user['id']),
                                 username=username,
                                 message_content=message.content or "Task submission",
                                 has_image=True,
                                 image_url=image_url,
-                                task_id=active_task['id']
+                                task_id=tasks[0]['id']  # Use the first pending task
                             )
                             
                             # Analyze the image and generate response
@@ -91,8 +93,8 @@ async def on_message(message):
                                 
                                 # Generate accountability response
                                 response_data = await accountability_partner.generate_response(
-                                    task_description=active_task['description'],
-                                    due_date=active_task['due_time'],
+                                    task_description=tasks[0]['description'],
+                                    due_date=tasks[0]['due_time'],
                                     submitted_notes=message.content or "",
                                     image_analysis=image_analysis
                                 )
@@ -100,15 +102,15 @@ async def on_message(message):
                                 # Update task status and scores
                                 if response_data['meets_criteria']:
                                     await image_store.update_task_status(
-                                        active_task['id'],
+                                        tasks[0]['id'],
                                         'completed',
                                         response_data['confidence'],
                                         response_data['completion']
                                     )
                                 else:
                                     await image_store.update_task_status(
-                                        active_task['id'],
-                                        'in_progress',
+                                        tasks[0]['id'],
+                                        'pending',
                                         response_data['confidence'],
                                         response_data['completion']
                                     )
@@ -123,7 +125,7 @@ async def on_message(message):
                                 print(f"Error analyzing submission: {str(e)}")
                                 await message.channel.send("Sorry, there was an error analyzing your submission.")
                             
-                            print(f"Processed submission from {username} (ID: {user_id})")
+                            print(f"Processed submission from {username} (ID: {user['id']})")
                         else:
                             await message.channel.send("Sorry, there was an error uploading your submission.")
                             
@@ -136,11 +138,11 @@ async def on_message(message):
         elif message.content:  # Store text messages without images
             # Store the message in Supabase
             await image_store.store_message(
-                user_id=user_id,
+                user_id=str(user['id']),
                 username=username,
                 message_content=message.content,
                 has_image=False,
-                task_id=active_task['id']
+                task_id=tasks[0]['id']
             )
 
 # Run the bot
