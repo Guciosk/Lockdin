@@ -17,10 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Plus, Trophy, Calendar, Clock, Heart, Brain, Zap, FileText, Info } from "lucide-react";
+import { X, Plus, Trophy, Calendar, Clock, Heart, Brain, Zap, FileText, Info, Activity } from "lucide-react";
 
 import { createClient } from "@/utils/supabase/client";
-import { useAppAuth } from '@/context/AppContext';
+import { useAppAuth, useAppTasks, useAppFeed, useAppUserStats } from "@/context/AppContext";
 import { nyToUtc, isDstInEasternTime, testTimeConversion } from '@/lib/timezone-utils';
 import { UserGoal } from '@/lib/dummy-data';
 import { FeedPost } from '@/lib/api';
@@ -304,8 +304,28 @@ const UpcomingGoals = () => {
  * Includes a leaderboard showing top users ranked by points.
  */
 const NewsFeed = () => {
-    // Use the imported functions for calculating points and generating user stats
-    const userStats = generateUserStats(dummyNewsFeed);
+    const { feedPosts, recentImages, isLoading } = useAppFeed();
+    
+    // Create a map of users with their points and tasks for the leaderboard
+    const userStats = feedPosts.reduce((acc, post) => {
+        if (!acc[post.username]) {
+            acc[post.username] = {
+                points: post.points,
+                goals: [],
+                userImage: `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.username}` // Generate avatar based on username
+            };
+        }
+        
+        // Add this post to the user's goals if not already included
+        if (!acc[post.username].goals.some(goal => goal.id === post.task_id)) {
+            acc[post.username].goals.push({
+                id: post.task_id,
+                title: post.task_description
+            });
+        }
+        
+        return acc;
+    }, {} as Record<string, { points: number; goals: any[]; userImage: string }>);
 
     return (
         <div className="space-y-6">
@@ -317,121 +337,130 @@ const NewsFeed = () => {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.entries(userStats)
-                            .sort(([,a], [,b]) => b.points - a.points) // Sort by points
-                            .map(([username, data], index) => (
-                            <motion.div
-                                key={username}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: index * 0.1, duration: 0.3 }}
-                            >
-                                <Card key={username} className={`bg-white ${index === 0 ? 'border-2 border-[#fbbf24]' : 'border-[#e5e7eb]'} hover:shadow-md transition-shadow duration-200`}>
-                                    <CardContent className="pt-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`relative ${index === 0 ? 'ring-2 ring-[#fbbf24] ring-offset-2' : ''} rounded-full`}>
-                                                <img 
-                                                    src={data.userImage} 
-                                                    alt={username} 
-                                                    className="w-12 h-12 rounded-full"
-                                                />
-                                                {index < 3 && (
-                                                    <span className={`absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full ${index === 0 ? 'bg-[#fbbf24]' : index === 1 ? 'bg-[#94a3b8]' : 'bg-[#b45309]'} text-white text-sm font-bold`}>
-                                                        {index + 1}
-                                                    </span>
-                                                )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                        {isLoading ? (
+                            <div className="col-span-2 flex justify-center p-6">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#60a5fa]"></div>
+                            </div>
+                        ) : Object.entries(userStats).length === 0 ? (
+                            <div className="col-span-2 text-center p-6 text-gray-500 dark:text-gray-400">
+                                No community data available yet.
+                            </div>
+                        ) : (
+                            Object.entries(userStats)
+                                .sort(([,a], [,b]) => b.points - a.points) // Sort by points
+                                .map(([username, data], index) => (
+                                <motion.div
+                                    key={username}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: index * 0.1, duration: 0.3 }}
+                                >
+                                    <Card key={username} className={`bg-white dark:bg-gray-800 ${index === 0 ? 'border-2 border-[#fbbf24]' : 'border-[#e5e7eb] dark:border-gray-700'} hover:shadow-md transition-shadow duration-200`}>
+                                        <CardContent className="pt-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`relative ${index === 0 ? 'ring-2 ring-[#fbbf24] ring-offset-2' : ''} rounded-full`}>
+                                                    <img 
+                                                        src={data.userImage} 
+                                                        alt={username} 
+                                                        className="w-12 h-12 rounded-full"
+                                                    />
+                                                    {index < 3 && (
+                                                        <span className={`absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full ${index === 0 ? 'bg-[#fbbf24]' : index === 1 ? 'bg-[#94a3b8]' : 'bg-[#b45309]'} text-white text-sm font-bold`}>
+                                                            {index + 1}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold dark:text-white">{username}</h3>
+                                                    <p className="text-sm text-[#60a5fa] dark:text-blue-400">
+                                                        🏆 {data.points} points • {data.goals.length} tasks
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 className="font-bold">{username}</h3>
-                                                <p className="text-sm text-[#60a5fa]">
-                                                    🏆 {data.points} points • {data.goals.length} tasks
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        ))}
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            ))
+                        )}
                     </div>
                 </CardContent>
             </Card>
 
             {/* Community Feed Posts */}
             <div className="space-y-6">
-                {dummyNewsFeed.map((item, index) => (
-                    <motion.div
-                        key={item.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1, duration: 0.3 }}
-                    >
-                        <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200 border-[#e5e7eb] bg-white">
-                            {/* Post Header */}
-                            <div className="p-4 border-b border-gray-100">
-                                <div className="flex items-center gap-3">
-                                    <img 
-                                        src={item.userImage} 
-                                        alt={item.username} 
-                                        className="w-8 h-8 rounded-full"
-                                    />
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold">{item.username}</h3>
-                                        <p className="text-xs text-gray-500">
-                                            {item.status} • {new Date(item.createdAt).toLocaleDateString()}
-                                        </p>
+                {isLoading ? (
+                    <div className="flex justify-center p-6">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#60a5fa]"></div>
+                    </div>
+                ) : feedPosts.length === 0 ? (
+                    <Card className="p-6 text-center text-gray-500 dark:text-gray-400 dark:bg-gray-800">
+                        <p>No feed posts available yet.</p>
+                    </Card>
+                ) : (
+                    feedPosts.map((item, index) => (
+                        <motion.div
+                            key={item.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1, duration: 0.3 }}
+                        >
+                            <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200 border-[#e5e7eb] bg-white dark:bg-gray-800 dark:border-gray-700">
+                                {/* Post Header */}
+                                <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center gap-3">
+                                        <img 
+                                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${item.username}`}
+                                            alt={item.username} 
+                                            className="w-8 h-8 rounded-full"
+                                        />
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold dark:text-white">{item.username}</h3>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {item.status} • {new Date(item.created_at).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div className="text-sm font-medium text-[#f87171] dark:text-red-400">
+                                            +{item.status === "completed" ? "50" : "25"} pts
+                                        </div>
                                     </div>
-                                    <div className="text-sm font-medium text-[#f87171]">
-                                        +{item.status === "Complete" ? "50" : "25"} pts
+                                </div>
+                                
+                                {/* Post Image */}
+                                <div className="aspect-square relative">
+                                    {item.image_url ? (
+                                        <img 
+                                            src={item.image_url}
+                                            alt={item.task_description}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : index < recentImages.length ? (
+                                        <img 
+                                            src={recentImages[index]}
+                                            alt="Task image"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                            <p className="text-gray-500 dark:text-gray-400">No image available</p>
+                                        </div>
+                                    )}
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+                                        <h4 className="text-white font-bold">{item.task_description}</h4>
+                                        <p className="text-white/90 text-sm">Due: {new Date(item.due_time).toLocaleDateString()}</p>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            {/* Post Image */}
-                            <div className="aspect-square relative">
-                                <img 
-                                    src={item.goalImage} 
-                                    alt={item.title}
-                                    className="w-full h-full object-cover"
-                                />
-                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
-                                    <h4 className="text-white font-bold">{item.title}</h4>
-                                    <p className="text-white/90 text-sm">Due: {new Date(item.dueDate).toLocaleDateString()}</p>
-                                </div>
-                            </div>
-
-                            {/* Post Interactions */}
-                            <CardContent className="pt-4">
-                                <div className="flex items-center gap-4 mb-3">
-                                    <motion.button 
-                                        className="text-gray-500 hover:text-[#f87171] transition-colors"
-                                        whileHover={{ scale: 1.1 }}
-                                        whileTap={{ scale: 0.95 }}
-                                    >
-                                        <Heart className="h-6 w-6" />
-                                    </motion.button>
-                                    <motion.button 
-                                        className="text-gray-500 hover:text-[#60a5fa] transition-colors"
-                                        whileHover={{ scale: 1.1 }}
-                                        whileTap={{ scale: 0.95 }}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                        </svg>
-                                    </motion.button>
-                                </div>
-                                <div className="space-y-2">
-                                    <p className="text-sm">
-                                        <span className="font-bold">{item.likes} likes</span> • <span className="text-gray-500">{item.comments} comments</span>
-                                    </p>
-                                    <p className="text-sm">
-                                        <span className="font-bold">{item.username}</span> {item.description}
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                ))}
+                                
+                                {/* Post Content */}
+                                {item.post_content && (
+                                    <div className="p-4">
+                                        <p className="text-gray-700 dark:text-gray-300">{item.post_content}</p>
+                                    </div>
+                                )}
+                            </Card>
+                        </motion.div>
+                    ))
+                )}
             </div>
         </div>
     );
@@ -449,26 +478,29 @@ const NewsFeed = () => {
  */
 const Dashboard = () => {
     const router = useRouter();
-    const supabase = createClient();
     const { user, logout } = useAppAuth();
-    const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
-    const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
-    const [localUser, setUser] = useState<any>(null);
-    const appName = "LOCKDIN";
+    const { tasks, markTaskComplete } = useAppTasks();
+    const { feedPosts, recentImages, isLoading } = useAppFeed();
+    const { stats: userStats } = useAppUserStats();
     
-    // Run the time conversion test when the component loads
-    useEffect(() => {
-        console.log("Running time conversion test...");
-        testTimeConversion();
-    }, []);
+    const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
     
     // Progress calculation
     const totalXP = 350;
     const xpToNextLevel = 500;
     const progressPercentage = (totalXP / xpToNextLevel) * 100;
     const isHealthy = progressPercentage > 20;
+    
+    // Filter tasks by status
+    const pendingTasks = tasks.filter(task => task.status === 'pending' || task.status === 'in_progress');
+    const completedTasks = tasks.filter(task => task.status === 'completed');
+    const failedTasks = tasks.filter(task => task.status === 'failed');
+    
+    // Run the time conversion test when the component loads
+    useEffect(() => {
+        console.log("Running time conversion test...");
+        testTimeConversion();
+    }, []);
 
     /**
      * Check authentication status on component mount
@@ -483,8 +515,6 @@ const Dashboard = () => {
             router.push("/login");
             return;
         }
-
-        setUser(JSON.parse(storedUser));
     }, [router]);
 
     /**
@@ -818,46 +848,36 @@ const Dashboard = () => {
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-gray-900">
             {/* Header with user info and logout */}
-            <header className="bg-white dark:bg-gray-900 shadow-md sticky top-0 z-30 border-b border-[#e5e7eb] dark:border-gray-700">
+            <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-30 border-b border-[#e5e7eb] dark:border-gray-700">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center">
                     <div className="flex items-center">
                         <Image 
                             src="/lockedin.svg"
                             alt="Lockdin Logo" 
-                            width={2000}
-                            height={2000}
-                            className="h-60 w-auto"
+                            width={150}
+                            height={40}
+                            className="h-10 w-auto"
                             priority
                         />
                     </div>
-                    <div className="flex items-center gap-4">
-                        <motion.div 
-                            className="flex items-center gap-2"
-                            initial={{ opacity: 0, x: 10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.5, delay: 0.1 }}
-                        >
+                    <div className="flex items-center gap-3">
+                        <ThemeToggle />
+                        <div className="flex items-center gap-2">
                             <img 
                                 src={user?.image} 
                                 alt={user?.username} 
                                 className="w-8 h-8 rounded-full border-2 border-[#60a5fa]"
                             />
                             <span className="text-sm font-medium dark:text-white">{user?.fullName}</span>
-                        </motion.div>
-                        <ThemeToggle />
-                        <motion.div
-                            initial={{ opacity: 0, x: 10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.5, delay: 0.2 }}
+                        </div>
+                        <Button 
+                            onClick={handleLogout}
+                            variant="outline" 
+                            className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900 dark:text-red-400 dark:border-red-400"
+                            size="sm"
                         >
-                            <Button 
-                                onClick={handleLogout}
-                                variant="outline" 
-                                className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900 dark:text-red-400 dark:border-red-400"
-                            >
-                                Logout
-                            </Button>
-                        </motion.div>
+                            Logout
+                        </Button>
                     </div>
                 </div>
             </header>
@@ -873,93 +893,101 @@ const Dashboard = () => {
             />
 
             {/* Main content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Main content grid with side-by-side layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* News Feed - Takes 7 columns on large screens */}
-                    <motion.div 
-                        className="lg:col-span-7 space-y-6"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <NewsFeed />
-                    </motion.div>
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Community Leaderboard */}
+                    <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                        <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white p-4">
+                            <CardTitle className="flex items-center gap-2 text-lg font-medium">
+                                <Trophy className="h-5 w-5" /> Community Leaderboard
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                            <div className="space-y-4">
+                                {isLoading ? (
+                                    <div className="flex justify-center p-4">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#60a5fa]"></div>
+                                    </div>
+                                ) : feedPosts.length === 0 ? (
+                                    <div className="text-center p-4 text-gray-500 dark:text-gray-400">
+                                        No community data available yet.
+                                    </div>
+                                ) : (
+                                    <NewsFeed />
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                    {/* Right sidebar - Takes 5 columns on large screens */}
-                    <motion.div 
-                        className="lg:col-span-5 space-y-6"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
-                    >
-                        {/* User Stats */}
-                        <Card className="shadow-md dark:bg-gray-800 dark:border-gray-700">
-                            <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white rounded-t-lg">
-                                <CardTitle className="flex items-center gap-2">
-                                    <Trophy className="h-5 w-5" /> Your Progress
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4 pt-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium dark:text-gray-200">Total Points</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">{totalXP}</span>
+                    {/* Your Progress */}
+                    <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                        <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white p-4">
+                            <CardTitle className="flex items-center gap-2 text-lg font-medium">
+                                <Trophy className="h-5 w-5" /> Your Progress
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium dark:text-gray-200">Total Points</span>
+                                    <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">{totalXP}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium dark:text-gray-200">Tasks Completed</span>
+                                    <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">{completedTasks.length}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium dark:text-gray-200">Current Streak</span>
+                                    <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">3 days</span>
+                                </div>
+                                
+                                {/* Health Bar / Progress bar */}
+                                <div className="pt-2">
+                                    <div className="flex justify-between text-xs mb-1 dark:text-gray-300">
+                                        <span>Level 3</span>
+                                        <span>{totalXP}/{xpToNextLevel} XP to Level 4</span>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium dark:text-gray-200">Tasks Completed</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">5</span>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                        <div 
+                                            className="bg-green-500 h-2.5 rounded-full" 
+                                            style={{ width: `${Math.min(100, (totalXP / xpToNextLevel) * 100)}%` }}
+                                        ></div>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium dark:text-gray-200">Current Streak</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">3 days</span>
-                                    </div>
-                                    
-                                    {/* Health Bar / Progress bar */}
-                                    <div className="pt-2">
-                                        <div className="flex justify-between text-xs mb-1 dark:text-gray-300">
-                                            <span>Level 3</span>
-                                            <span>{totalXP}/{xpToNextLevel} XP to Level 4</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden border border-gray-300">
-                                            <motion.div 
-                                                className={`h-full rounded-full ${isHealthy ? 'bg-[#22c55e]' : 'bg-[#ef4444]'}`}
-                                                style={{ width: `${progressPercentage}%` }}
-                                                initial={{ width: '0%' }}
-                                                animate={{ width: `${progressPercentage}%` }}
-                                                transition={{ duration: 1, delay: 0.5 }}
-                                            >
-                                                {/* Add a subtle pulse animation for low health */}
-                                                {!isHealthy && (
-                                                    <motion.div 
-                                                        className="w-full h-full bg-[#ef4444]"
-                                                        animate={{ opacity: [0.7, 1, 0.7] }}
-                                                        transition={{ 
-                                                            repeat: Infinity, 
-                                                            duration: 1.5,
-                                                            ease: "easeInOut" 
-                                                        }}
-                                                    />
-                                                )}
-                                            </motion.div>
-                                        </div>
-                                        
-                                        {/* Health status message */}
-                                        <div className="mt-1 text-xs text-center">
-                                            {isHealthy ? (
-                                                <span className="text-[#22c55e] font-medium">Good progress! Keep it up!</span>
-                                            ) : (
-                                                <span className="text-[#ef4444] font-medium">Low progress! Complete more tasks to level up!</span>
-                                            )}
-                                        </div>
+                                    <div className="text-xs text-green-600 dark:text-green-400 mt-1 text-right">
+                                        Good progress! Keep it up!
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
 
-                        {/* Upcoming Goals - Now in the sidebar with scrolling */}
-                        <UpcomingGoals />
-                    </motion.div>
+                {/* Upcoming Tasks */}
+                <div className="mt-6">
+                    <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                        <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white p-4">
+                            <CardTitle className="flex items-center gap-2 text-lg font-medium">
+                                <Clock className="h-5 w-5" /> Your Upcoming Tasks
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <UpcomingGoals />
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Feed */}
+                <div className="mt-6">
+                    <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                        <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white p-4">
+                            <CardTitle className="flex items-center gap-2 text-lg font-medium">
+                                <Activity className="h-5 w-5" /> Community Feed
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <NewsFeed />
+                        </CardContent>
+                    </Card>
                 </div>
             </main>
         </div>
