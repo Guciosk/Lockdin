@@ -64,13 +64,27 @@ export function useAuth(): UseAuthReturn {
       // setUser(response.user);
       
       // For development, use dummy data
-      if (username === dummyCredentials.username && password === dummyCredentials.password) {
+      const foundUser = dummyCredentials.find(
+        cred => cred.username === username && cred.password === password
+      );
+      
+      if (foundUser) {
+        // Create a user object based on the credentials
+        const userObj = {
+          username: foundUser.username,
+          email: `${foundUser.username}@lockdin.com`,
+          fullName: foundUser.username,
+          image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${foundUser.username}`,
+          points: foundUser.points || 0,
+          discord_user_id: foundUser.discord_user_id || null
+        };
+        
         localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('user', JSON.stringify(dummyUser));
-        setUser(dummyUser as unknown as User);
+        localStorage.setItem('user', JSON.stringify(userObj));
+        setUser(userObj as unknown as User);
         router.push('/dashboard');
       } else {
-        throw new Error(`Invalid credentials. Use ${dummyCredentials.username}/${dummyCredentials.password}`);
+        throw new Error(`Invalid credentials. Please use one of the available test accounts.`);
       }
     } catch (err) {
       console.error('Login error:', err);

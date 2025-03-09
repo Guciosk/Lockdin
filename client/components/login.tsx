@@ -134,7 +134,11 @@ export const Login = () => {
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.7, duration: 0.5 }}
                             >
-                                Use username: <span className="text-[#60a5fa]">{dummyCredentials.username}</span> and password: <span className="text-[#60a5fa]">{dummyCredentials.password}</span>
+                                Available test accounts:
+                                <br />
+                                <span className="text-[#60a5fa]">{dummyCredentials[0].username}</span> / <span className="text-[#60a5fa]">{dummyCredentials[0].password}</span>
+                                <br />
+                                <span className="text-[#60a5fa]">{dummyCredentials[1].username}</span> / <span className="text-[#60a5fa]">{dummyCredentials[1].password}</span>
                             </motion.p>
                         </form>
                     </CardContent>

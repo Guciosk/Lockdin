@@ -54,16 +54,26 @@ export const dummyUser = {
     username: "admin",
     email: "admin@lockdin.com",
     fullName: "Admin User",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=AdminUser"
+    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=AdminUser",
+    points: 0,
+    discord_user_id: null
 };
 
 /**
  * Mock credentials for testing login functionality
  */
-export const dummyCredentials = {
-    username: "admin",
-    password: "admin"
-};
+export const dummyCredentials = [
+    {
+        username: "admin",
+        password: "admin"
+    },
+    {
+        username: "dabi_fe",
+        password: "1234",
+        points: 50,
+        discord_user_id: "1199341644810559541"
+    }
+];
 
 /**
  * Helper function to determine urgency based on due date
