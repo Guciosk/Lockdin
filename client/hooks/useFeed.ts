@@ -6,129 +6,54 @@
  */
 
 import { useState, useEffect } from 'react';
-import apiService, { FeedPost } from '@/lib/api';
+import { getFeedItems, getRecentImages, FeedItemWithDetails } from '@/lib/supabase-client';
 import { dummyNewsFeed } from '@/lib/dummy-data';
 
 interface UseFeedReturn {
-  feedPosts: FeedPost[];
+  feedPosts: FeedItemWithDetails[];
+  recentImages: string[];
   isLoading: boolean;
   error: string | null;
-  createPost: (post: Omit<FeedPost, 'id' | 'createdAt'>) => Promise<FeedPost>;
-  likePost: (postId: number) => Promise<void>;
-  commentOnPost: (postId: number, comment: string) => Promise<void>;
 }
 
 export function useFeed(): UseFeedReturn {
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+  const [feedPosts, setFeedPosts] = useState<FeedItemWithDetails[]>([]);
+  const [recentImages, setRecentImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch feed posts on mount
+  // Fetch feed posts and recent images on mount
   useEffect(() => {
-    const fetchFeedPosts = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true);
         
-        // In a real app, we would call the API
-        // const postsData = await apiService.feed.getFeedPosts();
-        // setFeedPosts(postsData);
+        // Fetch feed posts from Supabase
+        const postsData = await getFeedItems();
+        setFeedPosts(postsData);
         
-        // For development, use dummy data
-        setFeedPosts(dummyNewsFeed);
+        // Fetch recent images from Supabase storage
+        const imagesData = await getRecentImages(5);
+        setRecentImages(imagesData);
       } catch (err) {
-        console.error('Fetch feed posts error:', err);
-        setError('Failed to fetch feed posts');
+        console.error('Fetch feed data error:', err);
+        setError('Failed to fetch feed data');
+        
+        // Fallback to dummy data if there's an error
+        setFeedPosts(dummyNewsFeed as unknown as FeedItemWithDetails[]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchFeedPosts();
+    fetchData();
   }, []);
-
-  const createPost = async (post: Omit<FeedPost, 'id' | 'createdAt'>) => {
-    try {
-      setIsLoading(true);
-      
-      // In a real app, we would call the API
-      // const newPost = await apiService.feed.createFeedPost(post);
-      
-      // For development, simulate API call
-      const newPost: FeedPost = {
-        ...post,
-        id: Math.max(0, ...feedPosts.map(p => p.id)) + 1,
-        createdAt: new Date().toISOString(),
-        likes: 0,
-        comments: 0
-      };
-      
-      setFeedPosts(prevPosts => [newPost, ...prevPosts]);
-      
-      return newPost;
-    } catch (err) {
-      console.error('Create post error:', err);
-      setError('Failed to create post');
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const likePost = async (postId: number) => {
-    try {
-      setIsLoading(true);
-      
-      // In a real app, we would call the API
-      // await apiService.feed.likePost(postId);
-      
-      // For development, simulate API call
-      setFeedPosts(prevPosts => 
-        prevPosts.map(post => 
-          post.id === postId 
-            ? { ...post, likes: (post.likes || 0) + 1 } 
-            : post
-        )
-      );
-    } catch (err) {
-      console.error(`Like post ${postId} error:`, err);
-      setError('Failed to like post');
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const commentOnPost = async (postId: number, comment: string) => {
-    try {
-      setIsLoading(true);
-      
-      // In a real app, we would call the API
-      // await apiService.feed.commentOnPost(postId, comment);
-      
-      // For development, simulate API call
-      setFeedPosts(prevPosts => 
-        prevPosts.map(post => 
-          post.id === postId 
-            ? { ...post, comments: (post.comments || 0) + 1 } 
-            : post
-        )
-      );
-    } catch (err) {
-      console.error(`Comment on post ${postId} error:`, err);
-      setError('Failed to comment on post');
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return {
     feedPosts,
+    recentImages,
     isLoading,
-    error,
-    createPost,
-    likePost,
-    commentOnPost
+    error
   };
 }
 
