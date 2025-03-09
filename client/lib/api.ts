@@ -34,11 +34,13 @@ api.interceptors.request.use(
 
 // Types
 export interface User {
-  id: number;
+  id?: number;
   username: string;
   email: string;
   fullName: string;
   image: string;
+  points?: number;
+  discord_user_id?: string | null;
 }
 
 export interface Task {

@@ -16,15 +16,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Plus, Trophy, Calendar, Clock, Heart, Brain, Zap } from "lucide-react";
+import { X, Plus, Trophy, Calendar, Clock, Heart, Brain, Zap, FileText, Info } from "lucide-react";
 
 import { createClient } from "@/utils/supabase/client";
+import { useAppAuth } from '@/context/AppContext';
+import { nyToUtc, isDstInEasternTime, testTimeConversion } from '@/lib/timezone-utils';
+import { UserGoal } from '@/lib/dummy-data';
+import { FeedPost } from '@/lib/api';
 
 // Import dummy data and interfaces from the dedicated file
 import { 
     Goal, 
     UserStats, 
-    UserGoal,
     dummyNewsFeed, 
     dummyUserGoals,
     calculatePoints, 
@@ -46,6 +49,14 @@ const AddTaskModal = ({ isOpen, onClose, onAddTask }: {
     const [description, setDescription] = useState("");
     const [dueDate, setDueDate] = useState("");
     const [dueTime, setDueTime] = useState("23:59"); // Default to end of day
+    
+    // Get current time in New York
+    const now = new Date();
+    const isDst = isDstInEasternTime(now);
+    const nyOffset = isDst ? -4 : -5; // NY is UTC-4 during DST, UTC-5 otherwise
+    const nyTime = new Date(now.getTime() + nyOffset * 60 * 60 * 1000);
+    const nyTimeStr = nyTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const nyDateStr = nyTime.toLocaleDateString();
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,65 +109,75 @@ const AddTaskModal = ({ isOpen, onClose, onAddTask }: {
                                 <Input
                                     id="title"
                                     value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="What do you want to achieve?"
-                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+                                    placeholder="Enter task title"
                                     required
+                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
                                 />
                             </div>
                             
                             <div className="space-y-2">
                                 <Label htmlFor="description" className="text-sm font-medium flex items-center gap-2">
-                                    <Brain className="h-4 w-4 text-[#f87171]" /> Description
+                                    <FileText className="h-4 w-4 text-[#f87171]" /> Description
                                 </Label>
                                 <Input
                                     id="description"
                                     value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Add more details about your task"
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
+                                    placeholder="Enter task description"
+                                    required
                                     className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
                                 />
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label htmlFor="dueDate" className="text-sm font-medium flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-[#f87171]" /> Due Date
-                                </Label>
-                                <Input
-                                    id="dueDate"
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
-                                    required
-                                />
+                            <div className="bg-blue-50 p-3 rounded-md mb-4">
+                                <p className="text-xs text-blue-700 mb-1 font-medium">
+                                    <Info className="h-3 w-3 inline-block mr-1" />
+                                    Current New York Time: {nyDateStr} {nyTimeStr} {isDst ? "EDT" : "EST"}
+                                </p>
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label htmlFor="dueTime" className="text-sm font-medium flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-[#f87171]" /> Due Time
-                                </Label>
-                                <Input
-                                    id="dueTime"
-                                    type="time"
-                                    value={dueTime}
-                                    onChange={(e) => setDueTime(e.target.value)}
-                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
-                                    required
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="dueDate" className="text-sm font-medium flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-[#f87171]" /> Due Date (NY Time)
+                                    </Label>
+                                    <Input
+                                        id="dueDate"
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        required
+                                        className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
+                                    />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <Label htmlFor="dueTime" className="text-sm font-medium flex items-center gap-2">
+                                        <Clock className="h-4 w-4 text-[#f87171]" /> Due Time (NY Time)
+                                    </Label>
+                                    <Input
+                                        id="dueTime"
+                                        type="time"
+                                        value={dueTime}
+                                        onChange={(e) => setDueTime(e.target.value)}
+                                        required
+                                        className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
+                                    />
+                                </div>
                             </div>
                             
                             <div className="pt-2">
+                                <p className="text-xs text-gray-500 mb-4">
+                                    <Info className="h-3 w-3 inline-block mr-1" />
+                                    All times are in New York time (EST/EDT) and will be converted to UTC for storage.
+                                </p>
                                 <Button 
                                     type="submit" 
-                                    className="w-full bg-[#f87171] hover:bg-[#ef4444] text-white font-medium py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+                                    className="w-full bg-[#f87171] hover:bg-[#ef4444] text-white font-medium py-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
                                 >
-                                    Add Task (+25 XP)
+                                    Add Task
                                 </Button>
-                            </div>
-                            
-                            <div className="text-center text-xs text-gray-500 pt-2">
-                                Complete this task to earn points and level up!
                             </div>
                         </form>
                     </motion.div>
@@ -426,11 +447,19 @@ const NewsFeed = () => {
 const Dashboard = () => {
     const router = useRouter();
     const supabase = createClient();
-    
-    // State for task modal
+    const { user, logout } = useAppAuth();
     const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
-    const [user, setUser] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [userGoals, setUserGoals] = useState<UserGoal[]>([]);
+    const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+    const [localUser, setUser] = useState<any>(null);
     const appName = "LOCKDIN";
+    
+    // Run the time conversion test when the component loads
+    useEffect(() => {
+        console.log("Running time conversion test...");
+        testTimeConversion();
+    }, []);
     
     // Progress calculation
     const totalXP = 350;
@@ -466,7 +495,8 @@ const Dashboard = () => {
     };
 
     /**
-     * Adds a new task to the database
+     * Handles adding a new task
+     * 
      * @param title - The title of the task
      * @param description - The detailed description of the task
      * @param dueDate - The due date for task completion (format: YYYY-MM-DDThh:mm)
@@ -479,16 +509,94 @@ const Dashboard = () => {
             // First, check if the user exists in the database
             let userId;
             
-            if (user?.email) {
+            // Try to find dabi_fe user first (since we know it has a Discord ID)
+            const { data: dabiFeData, error: dabiFeError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', 'dabi_fe')
+                .single();
+            
+            if (!dabiFeError && dabiFeData) {
+                // Use dabi_fe user if found
+                userId = dabiFeData.id;
+                console.log("Using dabi_fe user for task creation");
+            } else if (user?.email) {
                 // Try to find the user by email
                 const { data: userData, error: userError } = await supabase
                     .from('users')
-                    .select('id')
+                    .select('id, discord_user_id')
                     .eq('username', user.email)
                     .single();
                 
-                if (userError || !userData) {
-                    console.log("User not found, defaulting to admin user");
+                if (!userError && userData && userData.discord_user_id) {
+                    // Use the logged-in user if they have a Discord ID
+                    userId = userData.id;
+                    console.log("Using logged-in user for task creation");
+                } else {
+                    console.log("User not found or has no Discord ID, defaulting to dabi_fe user");
+                    
+                    // Check if dabi_fe user exists
+                    const { data: dabiFeData, error: dabiFeError } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('username', 'dabi_fe')
+                        .single();
+                    
+                    if (!dabiFeError && dabiFeData) {
+                        userId = dabiFeData.id;
+                        console.log("Using dabi_fe user for task creation");
+                    } else {
+                        console.log("dabi_fe user not found, defaulting to admin user");
+                        
+                        // Check if admin user exists
+                        const { data: adminData, error: adminError } = await supabase
+                            .from('users')
+                            .select('id')
+                            .eq('username', 'admin')
+                            .single();
+                        
+                        if (adminError || !adminData) {
+                            console.log("Admin user not found, creating admin user");
+                            
+                            // Create admin user
+                            const { data: newAdminData, error: createError } = await supabase
+                                .from('users')
+                                .insert([{
+                                    username: 'admin',
+                                    created_at: new Date().toISOString(),
+                                    points: 0,
+                                    phone_number: null,
+                                    discord_user_id: "1199341644810559541" // Use dabi_fe's Discord ID
+                                }])
+                                .select();
+                            
+                            if (createError || !newAdminData || newAdminData.length === 0) {
+                                console.error("Failed to create admin user:", createError?.message);
+                                alert("Failed to add task. Could not create admin user.");
+                                return;
+                            }
+                            
+                            userId = newAdminData[0].id;
+                        } else {
+                            userId = adminData.id;
+                        }
+                    }
+                }
+            } else {
+                // Default to dabi_fe user if no user is logged in
+                // Check if dabi_fe user exists
+                const { data: dabiFeData, error: dabiFeError } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('username', 'dabi_fe')
+                    .single();
+                
+                if (!dabiFeError && dabiFeData) {
+                    userId = dabiFeData.id;
+                    console.log("Using dabi_fe user for task creation");
+                } else {
+                    // Fall back to admin user
+                    console.log("dabi_fe user not found, defaulting to admin user");
                     
                     // Check if admin user exists
                     const { data: adminData, error: adminError } = await supabase
@@ -508,7 +616,7 @@ const Dashboard = () => {
                                 created_at: new Date().toISOString(),
                                 points: 0,
                                 phone_number: null,
-                                discord_user_id: null
+                                discord_user_id: "1199341644810559541" // Use dabi_fe's Discord ID
                             }])
                             .select();
                         
@@ -522,49 +630,61 @@ const Dashboard = () => {
                     } else {
                         userId = adminData.id;
                     }
-                } else {
-                    userId = userData.id;
-                }
-            } else {
-                // Default to admin user if no user is logged in
-                // Check if admin user exists
-                const { data: adminData, error: adminError } = await supabase
-                    .from('users')
-                    .select('id')
-                    .eq('username', 'admin')
-                    .single();
-                
-                if (adminError || !adminData) {
-                    console.log("Admin user not found, creating admin user");
-                    
-                    // Create admin user
-                    const { data: newAdminData, error: createError } = await supabase
-                        .from('users')
-                        .insert([{
-                            username: 'admin',
-                            created_at: new Date().toISOString(),
-                            points: 0,
-                            phone_number: null,
-                            discord_user_id: null
-                        }])
-                        .select();
-                    
-                    if (createError || !newAdminData || newAdminData.length === 0) {
-                        console.error("Failed to create admin user:", createError?.message);
-                        alert("Failed to add task. Could not create admin user.");
-                        return;
-                    }
-                    
-                    userId = newAdminData[0].id;
-                } else {
-                    userId = adminData.id;
                 }
             }
             
-            // Convert the date string to a UTC Date object
+            // Parse the date string to a Date object
             // The dueDate format should be YYYY-MM-DDThh:mm
-            const dueDateObj = new Date(dueDate);
-            const utcDueDate = dueDateObj.toISOString();
+            console.log("=== Time Conversion Debug ===");
+            console.log("Original due date string:", dueDate);
+            
+            // Create a date object - this will be interpreted as local time by JavaScript
+            const localDueDateObj = new Date(dueDate);
+            console.log("Local due date object:", localDueDateObj.toString());
+            console.log("Local due date ISO:", localDueDateObj.toISOString());
+            
+            // Extract the date components
+            const [datePart, timePart] = dueDate.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes] = timePart.split(':').map(Number);
+            
+            console.log("Extracted components:", {
+                year, month, day, hours, minutes,
+                "date part": datePart,
+                "time part": timePart
+            });
+            
+            // Check if the date would be in DST in New York
+            const testDate = new Date(year, month - 1, day, hours, minutes);
+            const isDst = isDstInEasternTime(testDate);
+            console.log("Test date for DST check:", testDate.toString());
+            console.log("Is in DST:", isDst ? "Yes" : "No");
+            
+            // Calculate the UTC time
+            // During DST, New York is UTC-4, otherwise it's UTC-5
+            const utcOffset = isDst ? 4 : 5;
+            console.log("UTC offset to apply:", utcOffset);
+            
+            // Create a UTC date by specifying the time in UTC
+            // We need to adjust the hours by the UTC offset
+            const utcHours = hours + utcOffset;
+            console.log("UTC hours after offset:", utcHours);
+            
+            const utcDate = new Date(Date.UTC(year, month - 1, day, utcHours, minutes));
+            
+            // Get the ISO string for storage
+            const utcDueDate = utcDate.toISOString();
+            
+            // Log the converted date for debugging
+            console.log("Converted due date (UTC) as Date object:", utcDate.toString());
+            console.log("Converted due date (UTC) ISO:", utcDueDate);
+            
+            // Calculate time difference for verification
+            const timeDiffMs = utcDate.getTime() - localDueDateObj.getTime();
+            const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
+            console.log("Time difference in hours:", timeDiffHours);
+            console.log("Time difference should be approximately:", utcOffset);
+            console.log("Conversion correct:", Math.abs(timeDiffHours - utcOffset) < 0.1 ? "Yes" : "No");
             
             // Prepare task data according to the schema
             const newTaskData = {
@@ -574,6 +694,9 @@ const Dashboard = () => {
                 status: "pending", // Default status is pending
                 created_at: new Date().toISOString()
             };
+
+            console.log("Task data being sent to server:", newTaskData);
+            console.log("=== End Time Conversion Debug ===");
 
             // Insert task into the tasks table
             const { data: insertedTask, error: taskError } = await supabase
@@ -618,28 +741,76 @@ const Dashboard = () => {
                 }
             }
             
-            // Success handling
-            console.log("Task added successfully");
-            alert("Task added successfully! +25 XP");
+            // Show success message
+            alert("Task added successfully!");
             
-            // Update user points
-            const { error: pointsError } = await supabase
-                .from('users')
-                .update({ points: supabase.rpc('increment', { x: 25 }) })
-                .eq('id', userId);
-                
-            if (pointsError) {
-                console.error("Error updating points:", pointsError.message);
-            }
-            
-            // Refresh the task list
-            // TODO: Implement proper state refresh
+            // Refresh the page to show the new task
             window.location.reload();
-        } catch (err) {
-            console.error("Error in handleAddTask:", err);
-            alert("An unexpected error occurred. Please try again.");
+        } catch (e) {
+            console.error("Error adding task:", e);
+            alert("An error occurred while adding the task. Please try again.");
         }
     };
+
+    // Add a function to update existing users with a Discord user ID
+    const updateExistingUsers = async () => {
+        const supabase = createClient();
+        
+        try {
+            // Update the admin user with dabi_fe's Discord user ID
+            const { error: updateError } = await supabase
+                .from('users')
+                .update({ discord_user_id: "1199341644810559541" }) // Use dabi_fe's Discord ID
+                .eq('username', 'admin');
+            
+            if (updateError) {
+                console.error("Error updating admin user:", updateError.message);
+            } else {
+                console.log("Updated admin user with Discord ID");
+            }
+            
+            // Also update any other users without a Discord user ID
+            const { data: users, error } = await supabase
+                .from('users')
+                .select('id, username')
+                .is('discord_user_id', null);
+            
+            if (error) {
+                console.error("Error fetching users:", error.message);
+                return;
+            }
+            
+            if (!users || users.length === 0) {
+                console.log("No other users without Discord ID found");
+                return;
+            }
+            
+            console.log(`Found ${users.length} users without Discord ID`);
+            
+            // Update each user with a valid Discord user ID
+            for (const user of users) {
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .update({ discord_user_id: "1199341644810559541" }) // Use dabi_fe's Discord ID
+                    .eq('id', user.id);
+                
+                if (updateError) {
+                    console.error(`Error updating user ${user.username} (${user.id}):`, updateError.message);
+                } else {
+                    console.log(`Updated user ${user.username} (${user.id}) with Discord ID`);
+                }
+            }
+            
+            console.log("Finished updating users");
+        } catch (e) {
+            console.error("Error updating users:", e);
+        }
+    };
+
+    // Call the function when the component mounts
+    useEffect(() => {
+        updateExistingUsers();
+    }, []);
 
     return (
         <div className="min-h-screen bg-[#f8fafc]">
@@ -652,7 +823,7 @@ const Dashboard = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                     >
-                        {appName}
+                        LOCKDIN
                     </motion.h1>
                     <div className="flex items-center gap-4">
                         <motion.div 
