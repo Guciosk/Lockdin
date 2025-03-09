@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Lock, Heart } from "lucide-react";
+import Image from "next/image";
 
 // Import auth hook
 import { useAppAuth } from "@/context/AppContext";
@@ -55,11 +56,15 @@ export const Login = () => {
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+                                    className="flex justify-center w-full mb-4"
                                 >
-                                    <img 
-                                        src="/lockedin.png" 
+                                    <Image 
+                                        src="/lockedin.svg"
                                         alt="Lockdin Logo" 
-                                        className="h-16 w-auto mb-2"
+                                        width={2400}
+                                        height={1200}
+                                        className="h-96 w-auto"
+                                        priority
                                     />
                                 </motion.div>
                                 Welcome to LOCKDIN

@@ -11,6 +11,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -816,19 +817,17 @@ const Dashboard = () => {
         <div className="min-h-screen bg-[#f8fafc]">
             {/* Header with user info and logout */}
             <header className="bg-white shadow-md sticky top-0 z-30 border-b border-[#e5e7eb]">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                    <motion.div 
-                        className="flex items-center"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <img 
-                            src="/lockedin.png" 
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center">
+                    <div className="flex items-center">
+                        <Image 
+                            src="/lockedin.svg"
                             alt="Lockdin Logo" 
-                            className="h-10 w-auto"
+                            width={2000}
+                            height={2000}
+                            className="h-60 w-auto"
+                            priority
                         />
-                    </motion.div>
+                    </div>
                     <div className="flex items-center gap-4">
                         <motion.div 
                             className="flex items-center gap-2"
