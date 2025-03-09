@@ -1,5 +1,5 @@
 import { Geist } from "next/font/google";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { AppProvider } from "@/context/AppContext";
 import "./globals.css";
 
@@ -21,16 +21,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.className} suppressHydrationWarning>
       <body className="bg-background text-foreground" suppressHydrationWarning>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AppProvider>
+        <AppProvider>
+          <ThemeProvider>
             {children}
-          </AppProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </AppProvider>
       </body>
     </html>
   );

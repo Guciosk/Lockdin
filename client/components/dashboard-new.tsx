@@ -35,6 +35,8 @@ import {
     generateUserStats 
 } from "@/lib/dummy-data";
 
+import { ThemeToggle } from '@/components/ThemeToggle';
+
 /**
  * AddTaskModal Component
  * 
@@ -308,13 +310,13 @@ const NewsFeed = () => {
     return (
         <div className="space-y-6">
             {/* Community Leaderboard */}
-            <Card className="border-[#60a5fa] bg-white shadow-md">
-                <CardHeader className="bg-[#60a5fa] text-white">
+            <Card className="shadow-md dark:bg-gray-800 dark:border-gray-700">
+                <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white rounded-t-lg">
                     <CardTitle className="flex items-center gap-2">
                         <Trophy className="h-5 w-5" /> Community Leaderboard
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
+                <CardContent className="p-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Object.entries(userStats)
                             .sort(([,a], [,b]) => b.points - a.points) // Sort by points
@@ -814,9 +816,9 @@ const Dashboard = () => {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#f8fafc]">
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-gray-900">
             {/* Header with user info and logout */}
-            <header className="bg-white shadow-md sticky top-0 z-30 border-b border-[#e5e7eb]">
+            <header className="bg-white dark:bg-gray-900 shadow-md sticky top-0 z-30 border-b border-[#e5e7eb] dark:border-gray-700">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex justify-between items-center">
                     <div className="flex items-center">
                         <Image 
@@ -840,17 +842,18 @@ const Dashboard = () => {
                                 alt={user?.username} 
                                 className="w-8 h-8 rounded-full border-2 border-[#60a5fa]"
                             />
-                            <span className="text-sm font-medium">{user?.fullName}</span>
+                            <span className="text-sm font-medium dark:text-white">{user?.fullName}</span>
                         </motion.div>
+                        <ThemeToggle />
                         <motion.div
                             initial={{ opacity: 0, x: 10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.5, delay: 0.2 }}
                         >
                             <Button 
-                                variant="outline" 
                                 onClick={handleLogout}
-                                className="border-[#f87171] text-[#f87171] hover:bg-[#fee2e2] hover:text-[#ef4444] hover:border-[#ef4444]"
+                                variant="outline" 
+                                className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900 dark:text-red-400 dark:border-red-400"
                             >
                                 Logout
                             </Button>
@@ -891,8 +894,8 @@ const Dashboard = () => {
                         transition={{ duration: 0.5, delay: 0.2 }}
                     >
                         {/* User Stats */}
-                        <Card className="bg-white border-[#60a5fa] shadow-md">
-                            <CardHeader className="bg-[#60a5fa] text-white">
+                        <Card className="shadow-md dark:bg-gray-800 dark:border-gray-700">
+                            <CardHeader className="bg-[#60a5fa] dark:bg-blue-700 text-white rounded-t-lg">
                                 <CardTitle className="flex items-center gap-2">
                                     <Trophy className="h-5 w-5" /> Your Progress
                                 </CardTitle>
@@ -900,21 +903,21 @@ const Dashboard = () => {
                             <CardContent>
                                 <div className="space-y-4 pt-4">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium">Total Points</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa]">{totalXP}</span>
+                                        <span className="text-sm font-medium dark:text-gray-200">Total Points</span>
+                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">{totalXP}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium">Tasks Completed</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa]">5</span>
+                                        <span className="text-sm font-medium dark:text-gray-200">Tasks Completed</span>
+                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">5</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium">Current Streak</span>
-                                        <span className="text-2xl font-bold text-[#60a5fa]">3 days</span>
+                                        <span className="text-sm font-medium dark:text-gray-200">Current Streak</span>
+                                        <span className="text-2xl font-bold text-[#60a5fa] dark:text-blue-400">3 days</span>
                                     </div>
                                     
                                     {/* Health Bar / Progress bar */}
                                     <div className="pt-2">
-                                        <div className="flex justify-between text-xs mb-1">
+                                        <div className="flex justify-between text-xs mb-1 dark:text-gray-300">
                                             <span>Level 3</span>
                                             <span>{totalXP}/{xpToNextLevel} XP to Level 4</span>
                                         </div>
