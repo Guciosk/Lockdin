@@ -45,14 +45,18 @@ const AddTaskModal = ({ isOpen, onClose, onAddTask }: {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [dueDate, setDueDate] = useState("");
+    const [dueTime, setDueTime] = useState("23:59"); // Default to end of day
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onAddTask(title, description, dueDate);
+        // Combine date and time for the due date
+        const combinedDueDate = `${dueDate}T${dueTime}`;
+        onAddTask(title, description, combinedDueDate);
         // Reset form
         setTitle("");
         setDescription("");
         setDueDate("");
+        setDueTime("23:59");
         onClose();
     };
     
@@ -123,6 +127,20 @@ const AddTaskModal = ({ isOpen, onClose, onAddTask }: {
                                     type="date"
                                     value={dueDate}
                                     onChange={(e) => setDueDate(e.target.value)}
+                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
+                                    required
+                                />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <Label htmlFor="dueTime" className="text-sm font-medium flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-[#f87171]" /> Due Time
+                                </Label>
+                                <Input
+                                    id="dueTime"
+                                    type="time"
+                                    value={dueTime}
+                                    onChange={(e) => setDueTime(e.target.value)}
                                     className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
                                     required
                                 />
@@ -451,46 +469,175 @@ const Dashboard = () => {
      * Adds a new task to the database
      * @param title - The title of the task
      * @param description - The detailed description of the task
-     * @param dueDate - The due date for task completion
+     * @param dueDate - The due date for task completion (format: YYYY-MM-DDThh:mm)
      * @returns Promise that resolves when the task is added
      */
     const handleAddTask = async (title: string, description: string, dueDate: string) => {
-        // Validate required user data
-        if (!user?.email) {
-            console.error("Cannot add task: User email is missing");
-            return;
-        }
-
-        // Prepare task data
-        const taskData = {
-            title,
-            description, 
-            due_date: dueDate,
-            user_email: user.email,
-            created_at: new Date().toISOString()
-        };
-
+        const supabase = createClient();
+        
         try {
-            // Submit task to database
-            const { error } = await supabase
-                .from('goals')
-                .insert([taskData]);
+            // First, check if the user exists in the database
+            let userId;
+            
+            if (user?.email) {
+                // Try to find the user by email
+                const { data: userData, error: userError } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('username', user.email)
+                    .single();
+                
+                if (userError || !userData) {
+                    console.log("User not found, defaulting to admin user");
+                    
+                    // Check if admin user exists
+                    const { data: adminData, error: adminError } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('username', 'admin')
+                        .single();
+                    
+                    if (adminError || !adminData) {
+                        console.log("Admin user not found, creating admin user");
+                        
+                        // Create admin user
+                        const { data: newAdminData, error: createError } = await supabase
+                            .from('users')
+                            .insert([{
+                                username: 'admin',
+                                created_at: new Date().toISOString(),
+                                points: 0,
+                                phone_number: null,
+                                discord_user_id: null
+                            }])
+                            .select();
+                        
+                        if (createError || !newAdminData || newAdminData.length === 0) {
+                            console.error("Failed to create admin user:", createError?.message);
+                            alert("Failed to add task. Could not create admin user.");
+                            return;
+                        }
+                        
+                        userId = newAdminData[0].id;
+                    } else {
+                        userId = adminData.id;
+                    }
+                } else {
+                    userId = userData.id;
+                }
+            } else {
+                // Default to admin user if no user is logged in
+                // Check if admin user exists
+                const { data: adminData, error: adminError } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('username', 'admin')
+                    .single();
+                
+                if (adminError || !adminData) {
+                    console.log("Admin user not found, creating admin user");
+                    
+                    // Create admin user
+                    const { data: newAdminData, error: createError } = await supabase
+                        .from('users')
+                        .insert([{
+                            username: 'admin',
+                            created_at: new Date().toISOString(),
+                            points: 0,
+                            phone_number: null,
+                            discord_user_id: null
+                        }])
+                        .select();
+                    
+                    if (createError || !newAdminData || newAdminData.length === 0) {
+                        console.error("Failed to create admin user:", createError?.message);
+                        alert("Failed to add task. Could not create admin user.");
+                        return;
+                    }
+                    
+                    userId = newAdminData[0].id;
+                } else {
+                    userId = adminData.id;
+                }
+            }
+            
+            // Convert the date string to a UTC Date object
+            // The dueDate format should be YYYY-MM-DDThh:mm
+            const dueDateObj = new Date(dueDate);
+            const utcDueDate = dueDateObj.toISOString();
+            
+            // Prepare task data according to the schema
+            const newTaskData = {
+                user_id: userId,
+                description: description,
+                due_time: utcDueDate, // Store as UTC ISO string
+                status: "pending", // Default status is pending
+                created_at: new Date().toISOString()
+            };
+
+            // Insert task into the tasks table
+            const { data: insertedTask, error: taskError } = await supabase
+                .from('tasks')
+                .insert([newTaskData])
+                .select();
 
             // Handle database errors
-            if (error) {
-                console.error("Error adding task:", error.message);
+            if (taskError) {
+                console.error("Error adding task:", taskError.message);
                 alert("Failed to add task. Please try again.");
                 return;
+            }
+            
+            // Check if task was inserted and we have the ID
+            if (!insertedTask || insertedTask.length === 0) {
+                console.error("Task was not inserted properly");
+                alert("Failed to add task. Please try again.");
+                return;
+            }
+            
+            // Check if we should post to the feed
+            if (description && description.trim().length > 0) {
+                // Prepare feed data
+                const feedData = {
+                    user_id: userId,
+                    task_id: insertedTask[0].id,
+                    image_url: null, // Optional image
+                    status: "pending",
+                    timestamp: new Date().toISOString(),
+                    post_content: description
+                };
+                
+                // Insert into feed table
+                const { error: feedError } = await supabase
+                    .from('feed')
+                    .insert([feedData]);
+                
+                if (feedError) {
+                    console.error("Error adding to feed:", feedError.message);
+                    // Continue even if feed post fails
+                }
             }
             
             // Success handling
             console.log("Task added successfully");
             alert("Task added successfully! +25 XP");
             
-            // TODO: Implement task list refresh logic
-            // refreshTasks();
-        } catch (error) {
-            console.error("Error:", error);
+            // Update user points
+            const { error: pointsError } = await supabase
+                .from('users')
+                .update({ points: supabase.rpc('increment', { x: 25 }) })
+                .eq('id', userId);
+                
+            if (pointsError) {
+                console.error("Error updating points:", pointsError.message);
+            }
+            
+            // Refresh the task list
+            // TODO: Implement proper state refresh
+            window.location.reload();
+        } catch (err) {
+            console.error("Error in handleAddTask:", err);
+            alert("An unexpected error occurred. Please try again.");
         }
     };
 

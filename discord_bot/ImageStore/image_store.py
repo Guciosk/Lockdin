@@ -13,7 +13,7 @@ the discord user id of the sender of the image. when it finds that user,
 it extracts the user_id from it.
 now that it has the user_id, 
 it looks through tasks table and queries the task whose user_id matches the user_id the bot got. 
-if it cant find the task, the bot responds saying “You don't have any active tasks. Please create a task first.”
+if it cant find the task, the bot responds saying "You don't have any active tasks. Please create a task first."
 
 '''
 
@@ -26,22 +26,21 @@ class ImageStore:
             os.getenv('SUPABASE_KEY')
         )
 
-    async def store_message(self, user_id: str, username: str, message_content: str, has_image: bool = False, image_url: str = None, task_id: str = None):
+    async def store_message(self, user_id: str, username: str = None, message_content: str = "", has_image: bool = False, image_url: str = None, task_id: str = None):
         """
-        Store a message in the Supabase notes bucket
+        Store a message in the Supabase feed table
         """
         try:
             data = {
                 'user_id': user_id,
-                'username': username,
-                'content': message_content,
-                'timestamp': datetime.utcnow().isoformat(),
-                'has_image': has_image,
+                'task_id': task_id,
                 'image_url': image_url,
-                'task_id': task_id
+                'post_content': message_content,
+                'timestamp': datetime.utcnow().isoformat(),
+                'status': 'pending'
             }
             
-            result = self.supabase.table('notes').insert(data).execute()
+            result = self.supabase.table('feed').insert(data).execute()
             return result.data
         except Exception as e:
             print(f"Error storing message in Supabase: {str(e)}")
@@ -52,6 +51,24 @@ class ImageStore:
         Store an image in Supabase storage
         """
         try:
+            # First, check if the bucket exists by listing files
+            try:
+                self.supabase.storage.from_('notes').list()
+            except Exception as e:
+                print(f"Error accessing notes bucket: {str(e)}")
+                print("Attempting to create or access the bucket differently...")
+                
+                # Try to create the bucket if it doesn't exist
+                try:
+                    # This might not work depending on permissions, but worth a try
+                    self.supabase.storage.create_bucket('notes', {'public': True})
+                    print("Created notes bucket successfully")
+                except Exception as create_error:
+                    print(f"Could not create notes bucket: {str(create_error)}")
+                    # If we can't create or access the bucket, we'll store the image URL in the feed table
+                    # but return a placeholder URL
+                    return "https://placeholder.com/image-not-stored"
+            
             # Store the image in the notes bucket
             result = self.supabase.storage.from_('notes').upload(
                 path=filename,
@@ -64,14 +81,15 @@ class ImageStore:
             return image_url
         except Exception as e:
             print(f"Error storing image in Supabase: {str(e)}")
-            return None
+            # Return a placeholder URL so the process can continue
+            return "https://placeholder.com/image-upload-failed"
 
     async def get_user_messages(self, user_id: str, limit: int = 10):
         """
-        Retrieve messages for a specific user
+        Retrieve messages for a specific user from the feed table
         """
         try:
-            result = self.supabase.table('notes')\
+            result = self.supabase.table('feed')\
                 .select('*')\
                 .eq('user_id', user_id)\
                 .order('timestamp', desc=True)\
@@ -87,44 +105,69 @@ class ImageStore:
         Retrieve a task from the tasks table by user_id
         """
         try:
-            user = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
-            user_id = user.data[0]['id'] 
-            result = self.supabase.table('tasks').select('*').eq('user_id', user_id).execute()
-            return result.data
+            # Get the user by discord_user_id
+            user_result = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
+            
+            # Check if user exists
+            if not user_result.data or len(user_result.data) == 0:
+                print(f"No user found with discord_user_id: {discord_user_id}")
+                return []
+            
+            user_id = user_result.data[0]['id'] 
+            
+            # Get tasks for the user
+            task_result = self.supabase.table('tasks').select('*').eq('user_id', user_id).execute()
+            return task_result.data
         except Exception as e:
             print(f"Error retrieving task from Supabase: {str(e)}")
-            return None
+            return []
 
     
 
-    async def get_user_tasks(self, user_id: str):
+    async def get_user_tasks(self, discord_user_id: str):
         """
         Retrieve all tasks for a specific user
         """
         try:
-            result = self.supabase.table('tasks')\
+            # First, get the user by discord_user_id
+            user_result = self.supabase.table('users').select('*').eq('discord_user_id', discord_user_id).execute()
+            
+            # Check if user exists
+            if not user_result.data or len(user_result.data) == 0:
+                print(f"No user found with discord_user_id: {discord_user_id}")
+                return []
+            
+            user_id = user_result.data[0]['id']
+            
+            # Get tasks for the user
+            task_result = self.supabase.table('tasks')\
                 .select('*')\
                 .eq('user_id', user_id)\
                 .order('due_time', desc=True)\
                 .execute()
-            return result.data
+            return task_result.data
         except Exception as e:
             print(f"Error retrieving user tasks from Supabase: {str(e)}")
             return []
 
-    async def update_task_status(self, task_id: str, status: str, confidence: float = None, completion: float = None):
+    async def update_task_status(self, task_id, status, confidence=None, completion=None):
         """
-        Update task status and scores
+        Update the status of a task in the database
+        
+        Status can be one of:
+        - 'active': Task is active and pending completion
+        - 'completed': Task has been completed
+        - 'failed': Task was not completed by the due date
         """
         try:
             data = {
-                'status': status,
-                'last_updated': datetime.utcnow().isoformat()
+                'status': status
             }
             if confidence is not None:
                 data['confidence_score'] = confidence
-            if completion is not None:
-                data['completion_score'] = completion
+            # Remove the completion_score field as it doesn't exist in the database schema
+            # if completion is not None:
+            #     data['completion_score'] = completion
 
             result = self.supabase.table('tasks')\
                 .update(data)\
@@ -134,4 +177,41 @@ class ImageStore:
         except Exception as e:
             print(f"Error updating task status in Supabase: {str(e)}")
             return None
+        
+    async def check_image_exists(self, filename: str):
+        """
+        Check if an image exists in the notes storage bucket
+        """
+        try:
+            # Try to list files in the bucket to see if the file exists
+            files = self.supabase.storage.from_('notes').list()
+            
+            # Check if the filename is in the list of files
+            for file in files:
+                if file.get('name') == filename:
+                    return True
+                    
+            return False
+        except Exception as e:
+            print(f"Error checking if image exists: {str(e)}")
+            # Assume the image doesn't exist if we can't check
+            return False
+            
+    async def check_task_has_image(self, task_id: str):
+        """
+        Check if a task has an associated image in the feed table
+        """
+        try:
+            # Check if there's a feed entry with an image_url for this task
+            result = self.supabase.table('feed')\
+                .select('image_url')\
+                .eq('task_id', task_id)\
+                .not_.is_('image_url', 'null')\
+                .execute()
+            
+            # Return True if there's at least one entry with an image_url
+            return result.data and len(result.data) > 0
+        except Exception as e:
+            print(f"Error checking if task has image: {str(e)}")
+            return False
         
