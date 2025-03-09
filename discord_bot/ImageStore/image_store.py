@@ -199,18 +199,47 @@ class ImageStore:
             
     async def check_task_has_image(self, task_id: str):
         """
-        Check if a task has an associated image in the feed table
+        Check if a task has an associated image in the feed table and if the task is completed
+        
+        Returns True only if:
+        1. There's a feed entry with an image_url for this task, AND
+        2. The task status is 'completed'
+        
+        This allows users to submit another image if their previous submission was unsuccessful.
         """
         try:
-            # Check if there's a feed entry with an image_url for this task
-            result = self.supabase.table('feed')\
-                .select('image_url')\
+            # First, check the task status
+            task_result = self.supabase.table('tasks')\
+                .select('status')\
+                .eq('id', task_id)\
+                .execute()
+            
+            # If the task is already completed, return True (no need for another submission)
+            if task_result.data and len(task_result.data) > 0 and task_result.data[0]['status'] == 'completed':
+                print(f"Task {task_id} is already completed, no need for another submission")
+                return True
+            
+            # If the task is not completed, check if there's a feed entry with an image_url
+            # but return False to allow another submission
+            feed_result = self.supabase.table('feed')\
+                .select('image_url, status')\
                 .eq('task_id', task_id)\
                 .not_.is_('image_url', 'null')\
                 .execute()
             
-            # Return True if there's at least one entry with an image_url
-            return result.data and len(result.data) > 0
+            # If there's a feed entry with a completed status, return True
+            if feed_result.data and len(feed_result.data) > 0:
+                for entry in feed_result.data:
+                    if entry.get('status') == 'completed':
+                        print(f"Task {task_id} has a completed feed entry, no need for another submission")
+                        return True
+                
+                # If we get here, there are feed entries with images, but none are completed
+                print(f"Task {task_id} has {len(feed_result.data)} image submissions, but none are completed. Allowing another submission.")
+                return False
+            
+            # No feed entries with images
+            return False
         except Exception as e:
             print(f"Error checking if task has image: {str(e)}")
             return False

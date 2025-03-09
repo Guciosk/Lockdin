@@ -56,7 +56,11 @@ export const Login = () => {
                                     animate={{ scale: 1 }}
                                     transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
                                 >
-                                    <Heart className="h-12 w-12 text-white mb-2" />
+                                    <img 
+                                        src="/lockedin.png" 
+                                        alt="Lockdin Logo" 
+                                        className="h-16 w-auto mb-2"
+                                    />
                                 </motion.div>
                                 Welcome to LOCKDIN
                             </CardTitle>

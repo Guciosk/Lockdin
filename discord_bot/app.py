@@ -154,7 +154,8 @@ async def on_message(message):
         # Check if the task already has an image submission
         has_image = await image_store.check_task_has_image(task['id'])
         if has_image:
-            await message.channel.send(f"You've already submitted an image for your task: \"{task['description']}\". It's being processed.")
+            await message.channel.send(f"Your task \"{task['description']}\" is already completed. No need for another submission.")
+            await message.channel.send("If you want to create a new task, use: `!create_task <description> | YYYY-MM-DD HH:MM`")
             return
 
         # Handle any attached images
@@ -249,6 +250,19 @@ async def on_message(message):
                                     
                                     # Add encouragement to response
                                     response_data['response'] += "\n\nYour submission doesn't fully meet the criteria for this task. Please try again with a more complete submission to earn points."
+                                    
+                                    # Also update the feed entry status to indicate it was unsuccessful
+                                    try:
+                                        image_store.supabase.table('feed')\
+                                            .update({'status': 'unsuccessful'})\
+                                            .eq('task_id', task['id'])\
+                                            .execute()
+                                    except Exception as e:
+                                        print(f"Error updating feed status: {str(e)}")
+                                    
+                                    # Add explicit message about trying again
+                                    await asyncio.sleep(1)  # Wait a second
+                                    await message.channel.send("**You can try again by sending another image that better demonstrates your completed task.**")
                                 
                                 # Delete processing message
                                 await processing_msg.delete()
