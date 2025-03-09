@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Lock, Heart } from "lucide-react";
+import Image from "next/image";
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 // Import auth hook
 import { useAppAuth } from "@/context/AppContext";
@@ -36,114 +38,126 @@ export const Login = () => {
     const displayError = authError || error;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="w-[90%] max-w-md"
-            >
-                <Card className="border-[#60a5fa] shadow-lg overflow-hidden">
-                    <CardHeader className="bg-[#60a5fa] text-white pb-6">
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2, duration: 0.5 }}
-                        >
-                            <CardTitle className="text-3xl font-bold text-center flex flex-col items-center gap-2">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#60a5fa] dark:bg-gray-900 p-4">
+            <Card className="w-full max-w-md bg-white dark:bg-gray-800 shadow-xl">
+                <CardContent className="p-0">
+                    <div className="grid grid-cols-1 md:grid-cols-1">
+                        {/* Login Form */}
+                        <div className="p-6">
+                            <div className="flex justify-end mb-4">
+                                <ThemeToggle />
+                            </div>
+                            <div className="text-center mb-8">
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+                                    className="flex justify-center w-full mb-4"
                                 >
-                                    <Heart className="h-12 w-12 text-white mb-2" />
+                                    <Image 
+                                        src="/lockedin.svg"
+                                        alt="Lockdin Logo" 
+                                        width={2400}
+                                        height={1200}
+                                        className="h-96 w-auto"
+                                        priority
+                                    />
                                 </motion.div>
-                                Welcome to LOCKDIN
-                            </CardTitle>
-                            <p className="text-center text-white/80 mt-2">Your health accountability partner</p>
-                        </motion.div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <form onSubmit={handleLogin} className="space-y-5">
-                            <motion.div 
-                                className="space-y-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.4, duration: 0.5 }}
-                            >
-                                <Label htmlFor="username" className="text-sm font-medium flex items-center gap-2">
-                                    <User className="h-4 w-4 text-[#60a5fa]" /> Username
-                                </Label>
-                                <Input
-                                    id="username"
-                                    type="text"
-                                    placeholder="Enter your username"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
-                                    required
-                                    disabled={isLoading}
-                                />
-                            </motion.div>
-                            <motion.div 
-                                className="space-y-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.5, duration: 0.5 }}
-                            >
-                                <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
-                                    <Lock className="h-4 w-4 text-[#60a5fa]" /> Password
-                                </Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    placeholder="Enter your password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="border-[#60a5fa] focus:ring-[#60a5fa] focus:border-[#60a5fa]"
-                                    required
-                                    disabled={isLoading}
-                                />
-                            </motion.div>
-                            {displayError && (
-                                <motion.p 
-                                    className="text-sm text-[#f87171] text-center"
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ duration: 0.3 }}
+                                <motion.h1
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="text-3xl font-bold text-gray-900 dark:text-white"
                                 >
-                                    {displayError}
+                                    Welcome to LOCKDIN
+                                </motion.h1>
+                                <motion.p
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="text-gray-600 dark:text-gray-300"
+                                >
+                                    Your health accountability partner
                                 </motion.p>
-                            )}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.6, duration: 0.5 }}
-                            >
-                                <Button 
-                                    type="submit" 
-                                    className="w-full bg-[#f87171] hover:bg-[#ef4444] text-white font-medium py-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
-                                    disabled={isLoading}
+                            </div>
+                            <form onSubmit={handleLogin} className="space-y-5">
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.6 }}
+                                    className="space-y-2"
                                 >
-                                    {isLoading ? 'Logging in...' : 'Login'}
-                                </Button>
-                            </motion.div>
-                            <motion.p 
-                                className="text-xs text-center text-gray-500 mt-4"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.7, duration: 0.5 }}
-                            >
-                                Available test accounts:
-                                <br />
-                                <span className="text-[#60a5fa]">{dummyCredentials[0].username}</span> / <span className="text-[#60a5fa]">{dummyCredentials[0].password}</span>
-                                <br />
-                                <span className="text-[#60a5fa]">{dummyCredentials[1].username}</span> / <span className="text-[#60a5fa]">{dummyCredentials[1].password}</span>
-                            </motion.p>
-                        </form>
-                    </CardContent>
-                </Card>
-            </motion.div>
+                                    <Label htmlFor="username" className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                        <User className="h-4 w-4" /> Username
+                                    </Label>
+                                    <Input
+                                        id="username"
+                                        type="text"
+                                        placeholder="Enter your username"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        className="border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        required
+                                    />
+                                </motion.div>
+                                
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.7 }}
+                                    className="space-y-2"
+                                >
+                                    <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                        <Lock className="h-4 w-4" /> Password
+                                    </Label>
+                                    <Input
+                                        id="password"
+                                        type="password"
+                                        placeholder="Enter your password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        required
+                                    />
+                                </motion.div>
+                                
+                                {displayError && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 p-3 rounded-md text-sm"
+                                    >
+                                        {displayError}
+                                    </motion.div>
+                                )}
+                                
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.8 }}
+                                >
+                                    <Button 
+                                        type="submit" 
+                                        className="w-full bg-[#60a5fa] hover:bg-[#3b82f6] text-white dark:bg-blue-700 dark:hover:bg-blue-600"
+                                        disabled={isLoading}
+                                    >
+                                        {isLoading ? 'Logging in...' : 'Login'}
+                                    </Button>
+                                </motion.div>
+                                
+                                <motion.p 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.9 }}
+                                    className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4"
+                                >
+                                    For demo, use: {dummyCredentials[0].username} / {dummyCredentials[0].password}
+                                </motion.p>
+                            </form>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }; 
